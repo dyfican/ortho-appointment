@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>段医生正畸门诊 · 管理后台</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="loadQRCodeFallback()"></script>
+  <script>
+    function loadQRCodeFallback() {
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js';
+      document.head.appendChild(s);
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      line-height: 1.6;
+    }
+    .container { max-width: 1320px; margin: 0 auto; padding: 16px; }
+    header {
+      background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%);
+      color: white;
+      padding: 24px 28px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 15px rgba(197,48,48,0.3);
+    }
+    header h1 { font-size: 24px; margin-bottom: 4px; }
+    header p { opacity: 0.92; font-size: 12px; }
+    .top-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .top-bar button {
+      padding: 7px 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .btn-red { background: #c53030; color: white; }
+    .btn-red:hover { background: #9b2c2c; }
+    .btn-green { background: #38a169; color: white; }
+    .btn-green:hover { background: #276749; }
+    .btn-blue { background: #3182ce; color: white; }
+    .btn-blue:hover { background: #2b6cb0; }
+    .btn-gray { background: #a0aec0; color: white; }
+    .btn-gray:hover { background: #718096; }
+    .btn-orange { background: #dd6b20; color: white; }
+    .btn-orange:hover { background: #c05621; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 16px;
+    }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .card h2 {
+      font-size: 15px;
+      margin-bottom: 12px;
+      color: #1a202c;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .month-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .month-nav button {
+      background: #c53030;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .month-nav button:hover { background: #9b2c2c; }
+    .month-nav span { font-size: 16px; font-weight: 600; color: #2d3748; }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .weekday {
+      text-align: center;
+      font-size: 11px;
+      color: #718096;
+      padding: 6px 0;
+      font-weight: 600;
+    }
+    .day {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 5px 4px;
+      min-height: 90px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .day:hover { border-color: #c53030; background: #fff5f5; }
+    .day.empty { background: #f7fafc; border-color: transparent; cursor: default; }
+    .day.selected { border-color: #c53030; box-shadow: 0 0 0 2px rgba(197,48,48,0.2); }
+    .day-number {
+      font-size: 13px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 2px;
+    }
+    .half-day-row {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      margin-top: 2px;
+      font-size: 10px;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    .half-day-row.am { background: #ebf8ff; }
+    .half-day-row.pm { background: #f0fff4; }
+    .half-day-row.closed { background: #e2e8f0; opacity: 0.6; text-decoration: line-through; }
+    .half-label { font-weight: 600; min-width: 22px; }
+    .half-loc {
+      padding: 0px 4px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    .loc-s { background: #c6f6d5; color: #22543d; }
+    .loc-e { background: #feebc8; color: #744210; }
+    .half-count { margin-left: auto; font-size: 9px; }
+    .tag-holiday {
+      display: inline-block;
+      background: #ffc107;
+      color: #856404;
+      font-size: 9px;
+      padding: 0 4px;
+      border-radius: 3px;
+      font-weight: 600;
+      margin-left: 2px;
+    }
+    .holiday-alert {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .form-group { margin-bottom: 12px; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: #4a5568;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 8px 11px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 13px;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: #c53030;
+      box-shadow: 0 0 0 3px rgba(197,48,48,0.08);
+    }
+    .btn-primary {
+      width: 100%;
+      padding: 10px;
+      background: #c53030;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: #9b2c2c; }
+    .btn-primary:disabled { background: #cbd5e0; cursor: not-allowed; }
+
+    .time-selector { display: flex; gap: 8px; margin-bottom: 12px; }
+    .time-option {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .time-option:hover { border-color: #c53030; }
+    .time-option.selected { border-color: #c53030; background: #fff5f5; }
+    .time-option.full { opacity: 0.5; cursor: not-allowed; background: #fed7d7; border-color: #fc8181; }
+    .time-option.closed { opacity: 0.35; cursor: not-allowed; background: #e2e8f0; border-color: #cbd5e0; }
+    .time-option .time-label { font-weight: 600; font-size: 12px; }
+    .time-option .time-count { font-size: 11px; color: #718096; margin-top: 2px; }
+    .time-option .time-loc { font-size: 10px; color: #4a5568; margin-top: 2px; }
+    .deadline-warning {
+      background: #fed7d7;
+      color: #742a2a;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .deadline-warning.show { display: block; }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+      animation: modalIn 0.3s ease;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal.wide { max-width: 800px; }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal h3 { margin-bottom: 12px; color: #1a202c; font-size: 16px; }
+    #qrcode { margin: 12px auto; }
+    .modal-info {
+      background: #f7fafc;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 12px 0;
+      text-align: left;
+      font-size: 12px;
+    }
+    .modal-info p { margin: 3px 0; }
+    .modal-close {
+      background: #c53030;
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .modal-actions button {
+      padding: 7px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 4px;
+    }
+    .tab {
+      padding: 6px 12px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: #718096;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .tab:hover { background: #f7fafc; }
+    .tab.active { color: #c53030; background: #fff5f5; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .search-box {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .search-box input {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .appointment-list { max-height: 340px; overflow-y: auto; }
+    .appt-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 12px;
+    }
+    .appt-info { flex: 1; }
+    .appt-name { font-weight: 600; color: #2d3748; font-size: 13px; }
+    .appt-meta { color: #718096; font-size: 11px; margin-top: 2px; }
+    .appt-status {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 10px;
+      margin-left: 4px;
+      font-weight: 600;
+    }
+    .status-booked { background: #bee3f8; color: #2b6cb0; }
+    .status-arrived { background: #c6f6d5; color: #22543d; }
+    .status-done { background: #e2e8f0; color: #4a5568; }
+    .status-cancel { background: #fed7d7; color: #c53030; text-decoration: line-through; }
+    .appt-actions { display: flex; gap: 3px; }
+    .appt-actions button {
+      border: none;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+    }
+    .btn-mini-green { background: #c6f6d5; color: #22543d; }
+    .btn-mini-blue { background: #bee3f8; color: #2b6cb0; }
+    .btn-mini-red { background: #fed7d7; color: #c53030; }
+    .btn-mini-gray { background: #e2e8f0; color: #4a5568; }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-box {
+      background: #f7fafc;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stat-number { font-size: 20px; font-weight: 700; color: #c53030; }
+    .stat-label { font-size: 11px; color: #718096; margin-top: 2px; }
+
+    .rule-item {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .rule-item h4 { font-size: 13px; margin-bottom: 6px; color: #2d3748; }
+    .rule-detail { color: #718096; line-height: 1.8; }
+    .rule-detail strong { color: #4a5568; }
+    .rule-actions { margin-top: 8px; display: flex; gap: 6px; }
+    .rule-actions button {
+      padding: 4px 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .form-row label { font-size: 12px; color: #4a5568; min-width: 80px; }
+    .form-row input, .form-row select {
+      padding: 6px 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .form-row input[type="number"] { width: 60px; }
+    .form-row .checkbox-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .form-row .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      min-width: auto;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .form-row .checkbox-group input { width: 14px; height: 14px; }
+
+    .day-config-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .day-config-item {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 5px;
+      text-align: center;
+      font-size: 10px;
+    }
+    .day-config-item .dc-date { font-weight: 600; margin-bottom: 3px; font-size: 11px; }
+    .day-config-item select, .day-config-item input[type="number"] {
+      width: 100%;
+      font-size: 10px;
+      padding: 2px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 2px;
+    }
+    .dc-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      font-size: 10px;
+    }
+    .dc-toggle input { width: 12px; height: 12px; }
+
+    .filter-bar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+    .filter-bar select {
+      padding: 5px 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .checkbox-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .checkbox-row input[type="checkbox"] { width: 14px; height: 14px; }
+    .checkbox-row label { font-size: 12px; color: #4a5568; }
+    .badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 3px; }
+    .badge-return { background: #e9d8fd; color: #553c9a; }
+    .badge-new { background: #c6f6d5; color: #22543d; }
+    textarea { resize: vertical; min-height: 50px; }
+    .empty-state { text-align: center; color: #a0aec0; padding: 20px; font-size: 12px; }
+
+    .section-title { font-size: 13px; font-weight: 600; color: #2d3748; margin: 12px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; }
+    .note-text { font-size: 11px; color: #718096; line-height: 1.6; }
+
+    /* 手机端响应式 */
+    @media (max-width: 768px) {
+      .container { padding: 8px; }
+      header { padding: 16px; }
+      header h1 { font-size: 18px; }
+      .grid { grid-template-columns: 1fr; }
+      .top-bar { gap: 6px; }
+      .top-bar button { padding: 6px 10px; font-size: 12px; }
+      .calendar { gap: 3px; }
+      .day { min-height: 56px; padding: 3px; font-size: 10px; }
+      .day .day-num { font-size: 11px; }
+      .day .slot-info { font-size: 9px; }
+      .modal { width: 92%; max-width: 340px; }
+      .appt-actions { flex-wrap: wrap; }
+      .btn-mini-green, .btn-mini-blue, .btn-mini-red, .btn-mini-gray { padding: 2px 6px; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>段医生正畸门诊 · 管理后台</h1>
+      <p>批量排班 · 逐日设置 · 预约管理 · 导入导出</p>
+      <p style="margin-top:6px;"><a href="patient.html" style="color:#fed7d7;font-size:12px;text-decoration:underline;">切换到患者预约端</a></p>
+    </header>
+
+    <div class="top-bar">
+      <button class="btn-red" onclick="showBatchSchedule()">批量排班</button>
+      <button class="btn-green" onclick="showDayConfig()">逐日设置</button>
+      <button class="btn-blue" onclick="exportData()">导出备份</button>
+      <button class="btn-gray" onclick="importData()">导入恢复</button>
+      <button class="btn-orange" onclick="showHolidayConfig()">节假日管理</button>
+      <input type="file" id="importFile" style="display:none" accept=".json" onchange="handleImport(event)">
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <div class="month-nav">
+            <button onclick="changeMonth(-1)">上月</button>
+            <span id="monthLabel"></span>
+            <button onclick="changeMonth(1)">下月</button>
+          </div>
+          <div id="holidayAlert"></div>
+          <div class="calendar" id="calendar"></div>
+        </div>
+
+        <div class="card" style="margin-top: 14px;">
+          <div class="tabs">
+            <button class="tab active" onclick="switchTab('list', this)">预约列表</button>
+            <button class="tab" onclick="switchTab('stats', this)">统计</button>
+            <button class="tab" onclick="switchTab('rules', this)">排班规则</button>
+          </div>
+
+          <div id="tab-list" class="tab-content active">
+            <div class="filter-bar">
+              <div class="search-box" style="flex:1;margin-bottom:0;">
+                <input type="text" id="searchInput" placeholder="搜索姓名、卡号..." oninput="renderAppointmentList()">
+              </div>
+              <select id="filterStatus" onchange="renderAppointmentList()">
+                <option value="">全部状态</option>
+                <option value="booked">已预约</option>
+                <option value="arrived">已签到</option>
+                <option value="done">已完成</option>
+                <option value="cancel">已取消</option>
+              </select>
+              <select id="filterLocation" onchange="renderAppointmentList()">
+                <option value="">全部院区</option>
+                <option value="south">南部</option>
+                <option value="east">东部</option>
+              </select>
+            </div>
+            <div class="filter-bar" style="margin-top:8px;">
+              <input type="date" id="filterDate" onchange="renderAppointmentList()" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+              <button class="btn-gray" style="padding:6px 12px;font-size:12px;" onclick="document.getElementById('filterDate').value='';renderAppointmentList();">清除日期</button>
+              <span style="font-size:12px;color:#718096;margin-left:auto;">按日期筛选方便通知患者</span>
+            </div>
+            <div class="appointment-list" id="appointmentList"></div>
+          </div>
+
+          <div id="tab-stats" class="tab-content">
+            <div class="stats-row">
+              <div class="stat-box"><div class="stat-number" id="totalAppt">0</div><div class="stat-label">总预约</div></div>
+              <div class="stat-box"><div class="stat-number" id="todayAppt">0</div><div class="stat-label">今日预约</div></div>
+              <div class="stat-box"><div class="stat-number" id="weekAppt">0</div><div class="stat-label">本周预约</div></div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-box"><div class="stat-number" id="arrivedAppt">0</div><div class="stat-label">今日已签到</div></div>
+              <div class="stat-box"><div class="stat-number" id="southAppt">0</div><div class="stat-label">南部预约</div></div>
+              <div class="stat-box"><div class="stat-number" id="eastAppt">0</div><div class="stat-label">东部预约</div></div>
+            </div>
+          </div>
+
+          <div id="tab-rules" class="tab-content">
+            <div id="ruleList"></div>
+            <button class="btn-green" style="margin-top:10px;width:auto;padding:7px 16px;" onclick="showAddRuleModal()">+ 添加规则</button>
+            <div class="note-text" style="margin-top:12px;">
+              规则说明：系统按规则列表从上到下匹配，手动逐日设置的日期优先级最高，不会被规则覆盖。<br>
+              修改规则后，需点击「批量排班」重新生成排班表。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card" id="bookingPanel">
+          <h2>预约登记</h2>
+          <div id="selectedDateDisplay" style="color:#c53030;font-size:13px;margin-bottom:10px;">
+            请先在左侧日历选择日期
+          </div>
+          <div class="deadline-warning" id="deadlineWarning">
+            今日17:00后，不可预约明天上午。请选择后天及以后。
+          </div>
+          <div class="time-selector" id="timeSelector" style="display:none;">
+            <div class="time-option" data-slot="am" onclick="selectSlot('am')">
+              <div class="time-label">上午</div>
+              <div class="time-loc" id="amLocDisplay">--</div>
+              <div class="time-count" id="amCount">0/0</div>
+            </div>
+            <div class="time-option" data-slot="pm" onclick="selectSlot('pm')">
+              <div class="time-label">下午</div>
+              <div class="time-loc" id="pmLocDisplay">--</div>
+              <div class="time-count" id="pmCount">0/0</div>
+            </div>
+          </div>
+          <div id="bookingForm" style="display:none;">
+            <div class="form-group">
+              <label>患者姓名</label>
+              <input type="text" id="patientName" placeholder="请输入患者姓名">
+            </div>
+            <div class="form-group">
+              <label>就诊卡号</label>
+              <input type="text" id="patientCard" placeholder="请输入卡号">
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="isReturnVisit" onchange="updateReturnBadge()">
+              <label for="isReturnVisit">复诊患者</label>
+              <span id="returnBadge"></span>
+            </div>
+            <div class="form-group">
+              <label>备注</label>
+              <textarea id="patientNote" placeholder="特殊需求、过敏史等..."></textarea>
+            </div>
+            <button class="btn-primary" onclick="submitBooking()">确认预约</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量排班弹窗 -->
+  <div class="modal-overlay" id="batchModal">
+    <div class="modal">
+      <h3>批量排班</h3>
+      <p class="note-text" style="margin-bottom:12px;">按当前规则列表自动生成排班，手动逐日设置的日期不会被覆盖。</p>
+      <div class="form-group">
+        <label>生效起始日期</label>
+        <input type="date" id="batchStartDate" value="2026-07-01">
+      </div>
+      <div class="form-group">
+        <label>生效时长（月）</label>
+        <input type="number" id="batchMonths" value="2" min="1" max="12">
+      </div>
+      <div class="modal-actions">
+        <button class="modal-close" onclick="runBatchSchedule()">开始生成</button>
+        <button class="modal-close" style="background:#a0aec0" onclick="closeModal('batchModal')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 逐日设置弹窗 -->
+  <div class="modal-overlay" id="dayConfigModal">
+    <div class="modal wide">
+      <h3>逐日排班设置</h3>
+      <p class="note-text" style="margin-bottom:8px;">可单独设置每一天上午/下午的院区、限额和开诊状态。</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <button class="btn-red" style="padding:5px 10px;font-size:12px;" onclick="changeDayConfigMonth(-1)">上月</button>
+        <span id="dayConfigMonthLabel" style="font-weight:600;font-size:14px;"></span>
+        <button class="btn-red" style="padding:5px 10px;font-size:12px;" onclick="changeDayConfigMonth(1)">下月</button>
+      </div>
+      <div class="day-config-grid" id="dayConfigGrid"></div>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="modal-close" onclick="saveDayConfig()">保存设置</button>
+        <button class="modal-close" style="background:#a0aec0" onclick="closeModal('dayConfigModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加规则弹窗 -->
+  <div class="modal-overlay" id="ruleModal">
+    <div class="modal wide" style="max-width:600px;">
+      <h3 id="ruleModalTitle">添加排班规则</h3>
+      <div class="form-group">
+        <label>规则名称</label>
+        <input type="text" id="ruleName" placeholder="如：周二东部隔周">
+      </div>
+      <div class="form-row">
+        <label>星期</label>
+        <div class="checkbox-group">
+          <label><input type="checkbox" value="1" class="ruleDow">一</label>
+          <label><input type="checkbox" value="2" class="ruleDow">二</label>
+          <label><input type="checkbox" value="3" class="ruleDow">三</label>
+          <label><input type="checkbox" value="4" class="ruleDow">四</label>
+          <label><input type="checkbox" value="5" class="ruleDow">五</label>
+          <label><input type="checkbox" value="6" class="ruleDow">六</label>
+          <label><input type="checkbox" value="0" class="ruleDow">日</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>院区</label>
+        <select id="ruleLocation">
+          <option value="south">南部</option>
+          <option value="east">东部</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>起始日期</label>
+        <input type="date" id="ruleStartDate" value="2026-07-01">
+      </div>
+      <div class="form-row">
+        <label>间隔周期</label>
+        <input type="number" id="ruleInterval" value="1" min="1" max="52"> 周
+      </div>
+      <div class="section-title">上午设置</div>
+      <div class="form-row">
+        <label>开诊</label>
+        <input type="checkbox" id="ruleAmEnabled" checked>
+        <label style="min-width:auto;margin-left:12px;">限额</label>
+        <input type="number" id="ruleAmMax" value="25" min="0" max="200"> 人
+      </div>
+      <div class="section-title">下午设置</div>
+      <div class="form-row">
+        <label>开诊</label>
+        <input type="checkbox" id="rulePmEnabled" checked>
+        <label style="min-width:auto;margin-left:12px;">限额</label>
+        <input type="number" id="rulePmMax" value="25" min="0" max="200"> 人
+      </div>
+      <input type="hidden" id="ruleEditId" value="">
+      <div class="modal-actions">
+        <button class="modal-close" onclick="saveRule()">保存规则</button>
+        <button class="modal-close" style="background:#a0aec0" onclick="closeModal('ruleModal')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 节假日管理弹窗 -->
+  <div class="modal-overlay" id="holidayModal">
+    <div class="modal" style="max-width:500px;">
+      <h3>节假日管理</h3>
+      <p class="note-text" style="margin-bottom:10px;">以下日期将被标记为节假日，可手动添加或删除。</p>
+      <div class="form-group">
+        <label>添加节假日</label>
+        <input type="date" id="newHolidayDate">
+        <button class="btn-green" style="margin-top:6px;width:auto;padding:5px 12px;font-size:12px;" onclick="addHoliday()">添加</button>
+      </div>
+      <div id="holidayList" style="max-height:200px;overflow-y:auto;margin:10px 0;"></div>
+      <div class="modal-actions">
+        <button class="modal-close" style="background:#a0aec0" onclick="closeModal('holidayModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 预约成功弹窗 -->
+  <div class="modal-overlay" id="successModal" onclick="if(event.target===this)closeModal('successModal')">
+    <div class="modal">
+      <h3>预约成功</h3>
+      <div id="qrcode"></div>
+      <div class="modal-info" id="modalInfo"></div>
+      <div class="modal-actions">
+        <button class="modal-close" onclick="closeModal('successModal')">关闭</button>
+        <button class="modal-close" style="background:#3182ce" onclick="window.print()">打印</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== 2026年法定节假日（默认） =====
+    let holidays = [
+      '2026-01-01', '2026-01-02', '2026-01-03',
+      '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+      '2026-04-04', '2026-04-05', '2026-04-06',
+      '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
+      '2026-06-19', '2026-06-20', '2026-06-21',
+      '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08'
+    ];
+
+    // ===== 默认规则 =====
+    const DEFAULT_RULES = [
+      {
+        id: 'rule1', name: '周三至周五南部固定',
+        daysOfWeek: [3, 4, 5], location: 'south',
+        startDate: '2026-07-01', intervalWeeks: 1,
+        amEnabled: true, amMax: 25, pmEnabled: true, pmMax: 25
+      },
+      {
+        id: 'rule2', name: '周二东部隔周',
+        daysOfWeek: [2], location: 'east',
+        startDate: '2026-07-08', intervalWeeks: 2,
+        amEnabled: true, amMax: 20, pmEnabled: true, pmMax: 5
+      },
+      {
+        id: 'rule3', name: '周六东部每四周',
+        daysOfWeek: [6], location: 'east',
+        startDate: '2026-06-13', intervalWeeks: 4,
+        amEnabled: true, amMax: 20, pmEnabled: true, pmMax: 5
+      },
+      {
+        id: 'rule4', name: '周六南部每两周',
+        daysOfWeek: [6], location: 'south',
+        startDate: '2026-06-06', intervalWeeks: 2,
+        amEnabled: true, amMax: 20, pmEnabled: true, pmMax: 5
+      }
+    ];
+
+    let rules = [];
+    let schedule = {}; // dateKey -> { am: {enabled, location, maxSlot}, pm: {...} }
+    let appointments = [];
+    let currentMonth = new Date().getMonth();
+    let currentYear = new Date().getFullYear();
+    let selectedDate = null;
+    let selectedSlot = null;
+    let dayConfigMonth = currentMonth;
+    let dayConfigYear = currentYear;
+
+    // ===== 工具函数 =====
+    function formatDate(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    function getDateKey(d) { return formatDate(d); }
+    function isHoliday(dateStr) { return holidays.includes(dateStr); }
+    function getLocationName(loc) { return loc === 'south' ? '南部' : loc === 'east' ? '东部' : '停诊'; }
+
+    // ===== 17:00截止逻辑 =====
+    function isSlotBookable(date, slot) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+      const target = new Date(date); target.setHours(0,0,0,0);
+      if (target.getTime() === tomorrow.getTime() && slot === 'am' && now.getHours() >= 17) {
+        return false;
+      }
+      return true;
+    }
+
+    // ===== 规则匹配 =====
+    function matchRule(date) {
+      const day = date.getDay();
+      const dateStr = getDateKey(date);
+      for (const rule of rules) {
+        if (!rule.daysOfWeek.includes(day)) continue;
+        const start = new Date(rule.startDate); start.setHours(0,0,0,0);
+        const target = new Date(dateStr); target.setHours(0,0,0,0);
+        if (target < start) continue;
+        const diffDays = Math.floor((target - start) / (24 * 60 * 60 * 1000));
+        const diffWeeks = Math.floor(diffDays / 7);
+        if (diffWeeks % rule.intervalWeeks === 0) {
+          return rule;
+        }
+      }
+      return null;
+    }
+
+    function generateScheduleForDate(date) {
+      const rule = matchRule(date);
+      if (!rule) {
+        return { am: { enabled: false, location: null, maxSlot: 0 }, pm: { enabled: false, location: null, maxSlot: 0 } };
+      }
+      return {
+        am: { enabled: rule.amEnabled, location: rule.location, maxSlot: rule.amMax },
+        pm: { enabled: rule.pmEnabled, location: rule.location, maxSlot: rule.pmMax }
+      };
+    }
+
+    function getDaySchedule(date) {
+      const key = getDateKey(date);
+      if (schedule[key]) return schedule[key];
+      return generateScheduleForDate(date);
+    }
+
+    // ===== 日历渲染 =====
+    function renderCalendar() {
+      const calendar = document.getElementById('calendar');
+      const monthLabel = document.getElementById('monthLabel');
+      calendar.innerHTML = '';
+      monthLabel.textContent = `${currentYear}年${currentMonth + 1}月`;
+
+      // 节假日提醒
+      const holidayAlert = document.getElementById('holidayAlert');
+      const monthHolidays = holidays.filter(h => {
+        const hd = new Date(h);
+        return hd.getFullYear() === currentYear && hd.getMonth() === currentMonth;
+      });
+      if (monthHolidays.length > 0) {
+        holidayAlert.innerHTML = `<div class="holiday-alert">
+          <span>⚠️</span>
+          <span>本月包含法定节假日：<strong>${monthHolidays.map(h => {
+            const d = new Date(h);
+            return `${d.getMonth()+1}月${d.getDate()}日`;
+          }).join('、')}</strong>，请确认是否停诊</span>
+        </div>`;
+      } else {
+        holidayAlert.innerHTML = '';
+      }
+
+      const weekdays = ['日','一','二','三','四','五','六'];
+      weekdays.forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'weekday';
+        el.textContent = d;
+        calendar.appendChild(el);
+      });
+
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0);
+      const startPadding = firstDay.getDay();
+
+      for (let i = 0; i < startPadding; i++) {
+        const el = document.createElement('div');
+        el.className = 'day empty';
+        calendar.appendChild(el);
+      }
+
+      for (let d = 1; d <= lastDay.getDate(); d++) {
+        const date = new Date(currentYear, currentMonth, d);
+        const ds = getDaySchedule(date);
+        const key = getDateKey(date);
+        const isHol = isHoliday(key);
+        const el = document.createElement('div');
+        el.className = 'day';
+        if (selectedDate && date.toDateString() === selectedDate.toDateString()) {
+          el.classList.add('selected');
+        }
+
+        let html = `<div class="day-number">${d}${isHol ? '<span class="tag-holiday">假</span>' : ''}</div>`;
+
+        ['am', 'pm'].forEach(slot => {
+          const cfg = ds[slot];
+          const count = getSlotCount(date, slot);
+          const full = count >= cfg.maxSlot;
+          const cls = cfg.enabled ? (full ? 'closed' : slot) : 'closed';
+          const locTag = cfg.enabled && cfg.location ? `<span class="half-loc loc-${cfg.location === 'south' ? 's' : 'e'}">${getLocationName(cfg.location)}</span>` : '<span class="half-loc" style="background:#e2e8f0;color:#718096">休</span>';
+          html += `<div class="half-day-row ${cls}">
+            <span class="half-label">${slot === 'am' ? '上' : '下'}</span>
+            ${locTag}
+            <span class="half-count">${cfg.enabled ? count + '/' + cfg.maxSlot : '停诊'}</span>
+          </div>`;
+        });
+
+        el.innerHTML = html;
+        el.onclick = () => selectDate(date);
+        calendar.appendChild(el);
+      }
+    }
+
+    function changeMonth(delta) {
+      currentMonth += delta;
+      if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+      if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+      renderCalendar();
+    }
+
+    // ===== 预约逻辑 =====
+    function selectDate(date) {
+      selectedDate = date;
+      selectedSlot = null;
+      renderCalendar();
+
+      const ds = getDaySchedule(date);
+      const dateStr = formatDate(date);
+
+      document.getElementById('selectedDateDisplay').innerHTML =
+        `已选择：<strong>${dateStr}</strong>`;
+
+      const amBookable = isSlotBookable(date, 'am');
+      const pmBookable = isSlotBookable(date, 'pm');
+      const amCount = getSlotCount(date, 'am');
+      const pmCount = getSlotCount(date, 'pm');
+
+      document.getElementById('amLocDisplay').textContent = ds.am.enabled ? getLocationName(ds.am.location) : '停诊';
+      document.getElementById('pmLocDisplay').textContent = ds.pm.enabled ? getLocationName(ds.pm.location) : '停诊';
+      document.getElementById('amCount').textContent = ds.am.enabled ? `${amCount}/${ds.am.maxSlot}` : '停诊';
+      document.getElementById('pmCount').textContent = ds.pm.enabled ? `${pmCount}/${ds.pm.maxSlot}` : '停诊';
+
+      const amOpt = document.querySelector('[data-slot="am"]');
+      const pmOpt = document.querySelector('[data-slot="pm"]');
+
+      amOpt.classList.toggle('full', ds.am.enabled && amCount >= ds.am.maxSlot);
+      amOpt.classList.toggle('closed', !ds.am.enabled || !amBookable);
+      pmOpt.classList.toggle('full', ds.pm.enabled && pmCount >= ds.pm.maxSlot);
+      pmOpt.classList.toggle('closed', !ds.pm.enabled || !pmBookable);
+      amOpt.classList.remove('selected');
+      pmOpt.classList.remove('selected');
+
+      const deadlineWarn = document.getElementById('deadlineWarning');
+      const now = new Date();
+      const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+      const isTomorrow = date.toDateString() === tomorrow.toDateString();
+      if (isTomorrow && now.getHours() >= 17) {
+        deadlineWarn.classList.add('show');
+      } else {
+        deadlineWarn.classList.remove('show');
+      }
+
+      document.getElementById('timeSelector').style.display = 'flex';
+      document.getElementById('bookingForm').style.display = 'none';
+    }
+
+    function selectSlot(slot) {
+      if (!selectedDate) return;
+      const ds = getDaySchedule(selectedDate);
+      const cfg = ds[slot];
+      if (!cfg.enabled) {
+        alert('该时段已停诊');
+        return;
+      }
+      if (!isSlotBookable(selectedDate, slot)) {
+        alert('今日17:00后不可预约明天上午，请选择其他日期');
+        return;
+      }
+      const count = getSlotCount(selectedDate, slot);
+      if (count >= cfg.maxSlot) {
+        alert('该时段已满额');
+        return;
+      }
+
+      selectedSlot = slot;
+      document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
+      document.querySelector(`[data-slot="${slot}"]`).classList.add('selected');
+      document.getElementById('bookingForm').style.display = 'block';
+    }
+
+    function getSlotCount(date, slot) {
+      const dateStr = date.toDateString();
+      return appointments.filter(a => a.date === dateStr && a.slot === slot && a.status !== 'cancel').length;
+    }
+
+    function updateReturnBadge() {
+      const badge = document.getElementById('returnBadge');
+      badge.innerHTML = document.getElementById('isReturnVisit').checked
+        ? '<span class="badge badge-return">复诊</span>'
+        : '<span class="badge badge-new">初诊</span>';
+    }
+    updateReturnBadge();
+
+    function submitBooking() {
+      try {
+        const name = document.getElementById('patientName').value.trim();
+        const card = document.getElementById('patientCard').value.trim();
+        const note = document.getElementById('patientNote').value.trim();
+        const isReturn = document.getElementById('isReturnVisit').checked;
+        if (!name || !card) { alert('请填写完整信息'); return; }
+        if (!selectedDate || !selectedSlot) { alert('请先选择日期和时段'); return; }
+
+        const ds = getDaySchedule(selectedDate);
+        const cfg = ds[selectedSlot];
+        if (!cfg.enabled) { alert('该时段已停诊'); return; }
+        if (!isSlotBookable(selectedDate, selectedSlot)) { alert('已超过今日17:00，不可预约明天上午'); return; }
+        if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { alert('该时段已满额'); return; }
+
+        const appt = {
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+          name, card, note, isReturn,
+          date: selectedDate.toDateString(),
+          slot: selectedSlot,
+          location: cfg.location,
+          status: 'booked',
+          createdAt: new Date().toISOString()
+        };
+        appointments.push(appt);
+        saveData();
+
+        showSuccessModal(appt);
+        renderCalendar();
+        renderAppointmentList();
+        updateStats();
+
+        document.getElementById('patientName').value = '';
+        document.getElementById('patientCard').value = '';
+        document.getElementById('patientNote').value = '';
+        document.getElementById('bookingForm').style.display = 'none';
+        document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
+        selectedSlot = null;
+      } catch (err) {
+        console.error('预约出错：', err);
+        alert('预约过程中出现错误：' + err.message + '\n\n如果二维码无法显示，请检查网络连接或刷新页面重试。');
+      }
+    }
+
+    function showSuccessModal(appt) {
+      const date = new Date(appt.date);
+      const dateStr = formatDate(date);
+      const slotStr = appt.slot === 'am' ? '上午' : '下午';
+
+      const modal = document.getElementById('successModal');
+      if (!modal) return;
+
+      document.getElementById('qrcode').innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        try {
+          new QRCode(document.getElementById('qrcode'), {
+            text: JSON.stringify({id: appt.id, name: appt.name, card: appt.card, date: appt.date, slot: appt.slot}),
+            width: 180, height: 180, colorDark: '#2d3748', colorLight: '#ffffff'
+          });
+        } catch (e) {
+          document.getElementById('qrcode').innerHTML = '<p style="color:#e53e3e;font-size:12px;">二维码生成失败，请截图下方信息</p>';
+        }
+      } else {
+        document.getElementById('qrcode').innerHTML = '<p style="color:#718096;font-size:12px;">二维码库加载失败<br>请截图保存下方预约信息</p>';
+      }
+
+      document.getElementById('modalInfo').innerHTML = `
+        <p><strong>患者：</strong>${appt.name} ${appt.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}</p>
+        <p><strong>卡号：</strong>${appt.card}</p>
+        <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
+        <p><strong>地点：</strong>${getLocationName(appt.location)}</p>
+        <p><strong>预约ID：</strong>${appt.id}</p>
+        ${appt.note ? `<p><strong>备注：</strong>${appt.note}</p>` : ''}
+        <p style="color:#718096;font-size:11px;margin-top:6px;">请截图保存此页面，就诊时出示</p>
+      `;
+
+      // 双重保障显示弹窗
+      modal.style.display = 'flex';
+      modal.classList.add('active');
+    }
+
+    // ===== 列表与统计 =====
+    function renderAppointmentList() {
+      const list = document.getElementById('appointmentList');
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const filterStatus = document.getElementById('filterStatus').value;
+      const filterLocation = document.getElementById('filterLocation').value;
+      const filterDate = document.getElementById('filterDate').value;
+
+      let filtered = appointments.filter(a => {
+        if (search && !a.name.toLowerCase().includes(search) && !a.card.includes(search)) return false;
+        if (filterStatus && a.status !== filterStatus) return false;
+        if (filterLocation && a.location !== filterLocation) return false;
+        if (filterDate) {
+          const d = new Date(a.date);
+          const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          if (dateStr !== filterDate) return false;
+        }
+        return true;
+      });
+      filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="empty-state">暂无匹配预约</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(a => {
+        const date = new Date(a.date);
+        const dateStr = `${date.getMonth()+1}月${date.getDate()}日`;
+        const slotStr = a.slot === 'am' ? '上午' : '下午';
+        const sm = { booked: { cls:'status-booked', text:'已预约' }, arrived: { cls:'status-arrived', text:'已签到' }, done: { cls:'status-done', text:'已完成' }, cancel: { cls:'status-cancel', text:'已取消' } };
+        const s = sm[a.status];
+        const safeId = encodeURIComponent(a.id);
+        return `<div class="appt-item" data-aid="${safeId}">
+          <div class="appt-info">
+            <div class="appt-name">${a.name} <span style="font-weight:normal;color:#718096">(${a.card})</span>
+              ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
+              <span class="appt-status ${s.cls}">${s.text}</span>
+            </div>
+            <div class="appt-meta">${dateStr} ${slotStr} · ${getLocationName(a.location)}${a.note ? ' · ' + a.note : ''}</div>
+          </div>
+          <div class="appt-actions">
+            ${a.status === 'booked' ? `<button class="btn-mini-green" data-action="arrive">签到</button>` : ''}
+            ${a.status === 'arrived' ? `<button class="btn-mini-blue" data-action="done">完成</button>` : ''}
+            ${a.status !== 'cancel' && a.status !== 'done' ? `<button class="btn-mini-red" data-action="cancel">取消</button>` : ''}
+            <button class="btn-mini-gray" data-action="qr">二维码</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // 事件委托：预约列表按钮点击
+    document.getElementById('appointmentList').addEventListener('click', function(e) {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const item = btn.closest('.appt-item');
+      if (!item) return;
+      const aid = decodeURIComponent(item.dataset.aid);
+      const action = btn.dataset.action;
+
+      if (action === 'arrive') { doSetStatus(aid, 'arrived'); }
+      else if (action === 'done') { doSetStatus(aid, 'done'); }
+      else if (action === 'cancel') { doCancel(aid); }
+      else if (action === 'qr') { doShowQR(aid); }
+    });
+
+    function doSetStatus(id, status) {
+      try {
+        const a = appointments.find(x => x.id === id);
+        if (!a) { alert('未找到预约记录'); return; }
+        a.status = status;
+        a[`${status}At`] = new Date().toISOString();
+        saveData();
+        renderAppointmentList();
+        renderCalendar();
+        updateStats();
+      } catch (err) {
+        console.error(err);
+        alert('操作失败：' + err.message);
+      }
+    }
+
+    function doCancel(id) {
+      try {
+        const a = appointments.find(x => x.id === id);
+        if (!a) { alert('未找到预约记录'); return; }
+        if (a.status === 'cancel') { alert('该预约已取消'); return; }
+        if (a.status === 'done') { alert('该预约已完成，无法取消'); return; }
+
+        a.status = 'cancel';
+        a.cancelAt = new Date().toISOString();
+        saveData();
+        renderAppointmentList();
+        renderCalendar();
+        updateStats();
+        alert('已取消预约：' + a.name + ' ' + (a.slot==='am'?'上午':'下午'));
+      } catch (err) {
+        console.error(err);
+        alert('取消失败：' + err.message);
+      }
+    }
+
+    function doShowQR(id) {
+      const a = appointments.find(x => x.id === id);
+      if (a) showSuccessModal(a);
+    }
+
+    function updateStats() {
+      const today = new Date().toDateString();
+      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      document.getElementById('totalAppt').textContent = appointments.length;
+      document.getElementById('todayAppt').textContent = appointments.filter(a => a.date === today).length;
+      document.getElementById('weekAppt').textContent = appointments.filter(a => new Date(a.date) >= weekStart).length;
+      document.getElementById('arrivedAppt').textContent = appointments.filter(a => a.date === today && a.status === 'arrived').length;
+      document.getElementById('southAppt').textContent = appointments.filter(a => a.location === 'south' && a.status !== 'cancel').length;
+      document.getElementById('eastAppt').textContent = appointments.filter(a => a.location === 'east' && a.status !== 'cancel').length;
+    }
+
+    // ===== 批量排班 =====
+    function showBatchSchedule() {
+      document.getElementById('batchModal').classList.add('active');
+    }
+
+    function runBatchSchedule() {
+      const startDateStr = document.getElementById('batchStartDate').value;
+      const months = parseInt(document.getElementById('batchMonths').value) || 2;
+      const start = new Date(startDateStr);
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + months);
+
+      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+        const key = getDateKey(d);
+        if (!schedule[key]) {
+          schedule[key] = generateScheduleForDate(d);
+        }
+      }
+      saveData();
+      closeModal('batchModal');
+      renderCalendar();
+      alert(`已生成从 ${startDateStr} 起 ${months} 个月的排班`);
+    }
+
+    // ===== 逐日设置 =====
+    function showDayConfig() {
+      dayConfigMonth = currentMonth;
+      dayConfigYear = currentYear;
+      renderDayConfigGrid();
+      document.getElementById('dayConfigModal').classList.add('active');
+    }
+
+    function changeDayConfigMonth(delta) {
+      dayConfigMonth += delta;
+      if (dayConfigMonth > 11) { dayConfigMonth = 0; dayConfigYear++; }
+      if (dayConfigMonth < 0) { dayConfigMonth = 11; dayConfigYear--; }
+      renderDayConfigGrid();
+    }
+
+    function renderDayConfigGrid() {
+      document.getElementById('dayConfigMonthLabel').textContent = `${dayConfigYear}年${dayConfigMonth + 1}月`;
+      const grid = document.getElementById('dayConfigGrid');
+      grid.innerHTML = '';
+      const firstDay = new Date(dayConfigYear, dayConfigMonth, 1);
+      const lastDay = new Date(dayConfigYear, dayConfigMonth + 1, 0);
+      const startPadding = firstDay.getDay();
+
+      for (let i = 0; i < startPadding; i++) grid.innerHTML += '<div></div>';
+
+      for (let d = 1; d <= lastDay.getDate(); d++) {
+        const date = new Date(dayConfigYear, dayConfigMonth, d);
+        const key = getDateKey(date);
+        const ds = schedule[key] || generateScheduleForDate(date);
+        const isHol = isHoliday(key);
+
+        grid.innerHTML += `
+          <div class="day-config-item" style="background:${ds.am.enabled || ds.pm.enabled ? (isHol ? '#fff3cd' : '#fff') : '#f0f0f0'}" data-date="${key}">
+            <div class="dc-date">${d}日${isHol ? '<span style="color:#ffc107">假</span>' : ''}</div>
+            <div style="font-size:9px;color:#718096;margin-bottom:2px;">上午</div>
+            <select onchange="updateDayHalfConfig('${key}', 'am', 'location', this.value)">
+              <option value="" ${!ds.am.location ? 'selected' : ''}>休</option>
+              <option value="south" ${ds.am.location === 'south' ? 'selected' : ''}>南部</option>
+              <option value="east" ${ds.am.location === 'east' ? 'selected' : ''}>东部</option>
+            </select>
+            <input type="number" value="${ds.am.maxSlot}" min="0" max="200" style="margin-bottom:4px;"
+              onchange="updateDayHalfConfig('${key}', 'am', 'maxSlot', this.value)">
+            <div style="font-size:9px;color:#718096;margin-bottom:2px;">下午</div>
+            <select onchange="updateDayHalfConfig('${key}', 'pm', 'location', this.value)">
+              <option value="" ${!ds.pm.location ? 'selected' : ''}>休</option>
+              <option value="south" ${ds.pm.location === 'south' ? 'selected' : ''}>南部</option>
+              <option value="east" ${ds.pm.location === 'east' ? 'selected' : ''}>东部</option>
+            </select>
+            <input type="number" value="${ds.pm.maxSlot}" min="0" max="200"
+              onchange="updateDayHalfConfig('${key}', 'pm', 'maxSlot', this.value)">
+          </div>
+        `;
+      }
+    }
+
+    function updateDayHalfConfig(dateStr, half, field, value) {
+      if (!schedule[dateStr]) {
+        const d = new Date(dateStr);
+        schedule[dateStr] = generateScheduleForDate(d);
+      }
+      if (field === 'location') {
+        schedule[dateStr][half].location = value || null;
+        schedule[dateStr][half].enabled = !!value;
+      } else if (field === 'maxSlot') {
+        schedule[dateStr][half].maxSlot = parseInt(value) || 0;
+      }
+      renderDayConfigGrid();
+    }
+
+    function saveDayConfig() {
+      saveData();
+      closeModal('dayConfigModal');
+      renderCalendar();
+      alert('逐日设置已保存');
+    }
+
+    // ===== 规则管理 =====
+    function renderRuleList() {
+      const container = document.getElementById('ruleList');
+      if (rules.length === 0) {
+        container.innerHTML = '<div class="empty-state">暂无规则，请先添加排班规则</div>';
+        return;
+      }
+      const dowNames = ['日','一','二','三','四','五','六'];
+      container.innerHTML = rules.map((r, i) => {
+        const days = r.daysOfWeek.map(d => `周${dowNames[d]}`).join('、');
+        return `<div class="rule-item">
+          <h4>${i + 1}. ${r.name}</h4>
+          <div class="rule-detail">
+            <strong>周期：</strong>${days} · 从 ${r.startDate} 起每 ${r.intervalWeeks} 周<br>
+            <strong>院区：</strong>${getLocationName(r.location)}<br>
+            <strong>上午：</strong>${r.amEnabled ? `开诊 · ${r.amMax}人` : '停诊'}<br>
+            <strong>下午：</strong>${r.pmEnabled ? `开诊 · ${r.pmMax}人` : '停诊'}
+          </div>
+          <div class="rule-actions">
+            <button class="btn-mini-blue" onclick="editRule('${r.id}')">编辑</button>
+            <button class="btn-mini-red" onclick="deleteRule('${r.id}')">删除</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function showAddRuleModal() {
+      document.getElementById('ruleModalTitle').textContent = '添加排班规则';
+      document.getElementById('ruleName').value = '';
+      document.querySelectorAll('.ruleDow').forEach(cb => cb.checked = false);
+      document.getElementById('ruleLocation').value = 'south';
+      document.getElementById('ruleStartDate').value = formatDate(new Date());
+      document.getElementById('ruleInterval').value = 1;
+      document.getElementById('ruleAmEnabled').checked = true;
+      document.getElementById('ruleAmMax').value = 25;
+      document.getElementById('rulePmEnabled').checked = true;
+      document.getElementById('rulePmMax').value = 25;
+      document.getElementById('ruleEditId').value = '';
+      document.getElementById('ruleModal').classList.add('active');
+    }
+
+    function editRule(id) {
+      const r = rules.find(x => x.id === id);
+      if (!r) return;
+      document.getElementById('ruleModalTitle').textContent = '编辑排班规则';
+      document.getElementById('ruleName').value = r.name;
+      document.querySelectorAll('.ruleDow').forEach(cb => {
+        cb.checked = r.daysOfWeek.includes(parseInt(cb.value));
+      });
+      document.getElementById('ruleLocation').value = r.location;
+      document.getElementById('ruleStartDate').value = r.startDate;
+      document.getElementById('ruleInterval').value = r.intervalWeeks;
+      document.getElementById('ruleAmEnabled').checked = r.amEnabled;
+      document.getElementById('ruleAmMax').value = r.amMax;
+      document.getElementById('rulePmEnabled').checked = r.pmEnabled;
+      document.getElementById('rulePmMax').value = r.pmMax;
+      document.getElementById('ruleEditId').value = id;
+      document.getElementById('ruleModal').classList.add('active');
+    }
+
+    function saveRule() {
+      const name = document.getElementById('ruleName').value.trim();
+      const daysOfWeek = Array.from(document.querySelectorAll('.ruleDow:checked')).map(cb => parseInt(cb.value));
+      const location = document.getElementById('ruleLocation').value;
+      const startDate = document.getElementById('ruleStartDate').value;
+      const intervalWeeks = parseInt(document.getElementById('ruleInterval').value) || 1;
+      const amEnabled = document.getElementById('ruleAmEnabled').checked;
+      const amMax = parseInt(document.getElementById('ruleAmMax').value) || 0;
+      const pmEnabled = document.getElementById('rulePmEnabled').checked;
+      const pmMax = parseInt(document.getElementById('rulePmMax').value) || 0;
+
+      if (!name || daysOfWeek.length === 0 || !startDate) {
+        alert('请填写完整信息');
+        return;
+      }
+
+      const editId = document.getElementById('ruleEditId').value;
+      const ruleData = {
+        id: editId || Date.now().toString(36),
+        name, daysOfWeek, location, startDate, intervalWeeks,
+        amEnabled, amMax, pmEnabled, pmMax
+      };
+
+      if (editId) {
+        const idx = rules.findIndex(r => r.id === editId);
+        if (idx >= 0) rules[idx] = ruleData;
+      } else {
+        rules.push(ruleData);
+      }
+      saveData();
+      closeModal('ruleModal');
+      renderRuleList();
+    }
+
+    function deleteRule(id) {
+      if (!confirm('确定删除此规则？')) return;
+      rules = rules.filter(r => r.id !== id);
+      saveData();
+      renderRuleList();
+    }
+
+    // ===== 节假日管理 =====
+    function showHolidayConfig() {
+      renderHolidayList();
+      document.getElementById('holidayModal').classList.add('active');
+    }
+
+    function renderHolidayList() {
+      const container = document.getElementById('holidayList');
+      holidays.sort();
+      container.innerHTML = holidays.map(h => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e2e8f0;font-size:12px;">
+          <span>${h}</span>
+          <button class="btn-mini-red" onclick="removeHoliday('${h}')">删除</button>
+        </div>
+      `).join('');
+    }
+
+    function addHoliday() {
+      const d = document.getElementById('newHolidayDate').value;
+      if (!d) return;
+      if (!holidays.includes(d)) {
+        holidays.push(d);
+        holidays.sort();
+        saveData();
+        renderHolidayList();
+        renderCalendar();
+      }
+    }
+
+    function removeHoliday(d) {
+      holidays = holidays.filter(h => h !== d);
+      saveData();
+      renderHolidayList();
+      renderCalendar();
+    }
+
+    // ===== 设置标签页 =====
+    function switchTab(tab, btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + tab).classList.add('active');
+    }
+
+    // ===== 数据持久化 =====
+    function saveData() {
+      localStorage.setItem('ortho_v3_rules', JSON.stringify(rules));
+      localStorage.setItem('ortho_v3_schedule', JSON.stringify(schedule));
+      localStorage.setItem('ortho_v3_appointments', JSON.stringify(appointments));
+      localStorage.setItem('ortho_v3_holidays', JSON.stringify(holidays));
+    }
+
+    function loadData() {
+      const r = localStorage.getItem('ortho_v3_rules');
+      if (r) rules = JSON.parse(r);
+      else rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+
+      const s = localStorage.getItem('ortho_v3_schedule');
+      if (s) schedule = JSON.parse(s);
+
+      const a = localStorage.getItem('ortho_v3_appointments');
+      if (a) appointments = JSON.parse(a);
+
+      const h = localStorage.getItem('ortho_v3_holidays');
+      if (h) holidays = JSON.parse(h);
+    }
+
+    // ===== 导出导入 =====
+    function exportData() {
+      const data = { rules, schedule, appointments, holidays, exportDate: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `段医生预约备份_${formatDate(new Date())}.json`;
+      link.click();
+    }
+
+    function importData() {
+      document.getElementById('importFile').click();
+    }
+
+    function handleImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.rules) rules = data.rules;
+          if (data.schedule) schedule = data.schedule;
+          if (data.appointments) appointments = data.appointments;
+          if (data.holidays) holidays = data.holidays;
+          saveData();
+          renderCalendar();
+          renderAppointmentList();
+          updateStats();
+          renderRuleList();
+          alert('数据导入成功');
+        } catch (err) {
+          alert('导入失败：文件格式错误');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.remove('active');
+        el.style.display = 'none';
+      }
+    }
+
+    // ===== 初始化 =====
+    loadData();
+    renderCalendar();
+    renderAppointmentList();
+    updateStats();
+    renderRuleList();
+  </script>
+</body>
+</html>
