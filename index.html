@@ -501,6 +501,23 @@
   </div>
 
   <script>
+    // ===== Supabase 配置 =====
+    const SB_URL = 'https://bdfwzfwgjtqjbouutlnd.supabase.co';
+    const SB_KEY = 'sb_publishable_sCup7QMIEVdad6Lo22hP7g_lTqs-viR';
+
+    // Supabase REST 请求封装
+    async function sbFetch(table, opts = {}) {
+      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
+      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
+      if (opts.method === 'POST' || opts.method === 'PATCH') {
+        headers['Content-Type'] = 'application/json';
+        headers['Prefer'] = 'return=representation';
+      }
+      const resp = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+      if (!resp.ok) throw new Error(`Supabase ${table} error: ${resp.status}`);
+      return opts.method === 'DELETE' ? null : resp.json();
+    }
+
     // ===== 与医生端共用数据 =====
     const STORAGE_KEYS = {
       rules: 'ortho_v3_rules',
@@ -544,24 +561,101 @@
     function getDateKey(d) { return formatDate(d); }
     function getLocName(loc) { return loc==='south'?'南部':loc==='east'?'东部':'停诊'; }
 
-    // ===== 加载数据 =====
-    function loadData() {
+    // ===== 加载数据（Supabase 优先，localStorage 兜底） =====
+    async function loadData() {
       try {
-        const h = localStorage.getItem(STORAGE_KEYS.holidays);
-        if (h) holidays = JSON.parse(h);
-        const r = localStorage.getItem(STORAGE_KEYS.rules);
-        rules = r ? JSON.parse(r) : JSON.parse(JSON.stringify(DEFAULT_RULES));
-        const s = localStorage.getItem(STORAGE_KEYS.schedule);
-        if (s) schedule = JSON.parse(s);
-        const a = localStorage.getItem(STORAGE_KEYS.appointments);
-        if (a) appointments = JSON.parse(a);
-      } catch(e) {}
+        // 加载规则
+        const sbRules = await sbFetch('schedule_rules', { query: '?select=*' });
+        if (sbRules && sbRules.length > 0) {
+          rules = sbRules.map(r => ({
+            id: r.id, name: r.name,
+            daysOfWeek: r.days_of_week, location: r.location,
+            startDate: r.start_date, intervalWeeks: r.interval_weeks,
+            amEnabled: r.am_enabled, amMax: r.am_max,
+            pmEnabled: r.pm_enabled, pmMax: r.pm_max
+          }));
+        } else {
+          rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+        }
+      } catch(e) {
+        console.warn('Supabase rules load failed, using defaults', e);
+        rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+      }
+
+      try {
+        // 加载节假日
+        const sbHolidays = await sbFetch('holidays', { query: '?select=date' });
+        if (sbHolidays && sbHolidays.length > 0) {
+          holidays = sbHolidays.map(h => h.date);
+        }
+      } catch(e) {
+        console.warn('Supabase holidays load failed, using defaults', e);
+      }
+
+      try {
+        // 加载预约
+        const sbAppts = await sbFetch('appointments', { query: '?select=*&status=neq.cancel&order=created_at.desc' });
+        if (sbAppts) {
+          appointments = sbAppts.map(a => ({
+            id: a.id.toString(), name: a.patient_name, card: a.patient_card,
+            note: '', isReturn: a.is_return, date: a.date, slot: a.slot,
+            location: a.location, status: a.status || 'booked', createdAt: a.created_at
+          }));
+          // 也加载已取消的
+          const cancelled = await sbFetch('appointments', { query: '?select=*&status=eq.cancel' });
+          if (cancelled) {
+            cancelled.forEach(a => {
+              appointments.push({
+                id: a.id.toString(), name: a.patient_name, card: a.patient_card,
+                note: '', isReturn: a.is_return, date: a.date, slot: a.slot,
+                location: a.location, status: 'cancel', createdAt: a.created_at
+              });
+            });
+          }
+        }
+      } catch(e) {
+        console.warn('Supabase appointments load failed', e);
+      }
+
+      // 本地记忆功能仍用 localStorage（设备级别，合理）
       loadLastPatient();
       renderRecentPatients();
     }
 
-    function saveAppointments() {
-      localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
+    // ===== 保存预约到 Supabase =====
+    async function saveAppointmentToDB(appt) {
+      try {
+        await sbFetch('appointments', {
+          method: 'POST',
+          body: {
+            id: parseInt(appt.id, 36) || undefined,
+            date: appt.date,
+            slot: appt.slot,
+            patient_name: appt.name,
+            patient_card: appt.card,
+            is_return: appt.isReturn,
+            location: appt.location,
+            status: 'booked'
+          }
+        });
+      } catch(e) {
+        console.error('Save to Supabase failed, saving locally', e);
+        // 兜底：存到 localStorage
+        localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
+      }
+    }
+
+    async function cancelAppointmentInDB(id) {
+      try {
+        await sbFetch('appointments', {
+          method: 'PATCH',
+          query: `?id=eq.${id}`,
+          body: { status: 'cancel' }
+        });
+      } catch(e) {
+        console.error('Cancel in Supabase failed', e);
+        localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
+      }
     }
 
     // ===== 记忆功能 =====
@@ -805,7 +899,7 @@
           createdAt: new Date().toISOString()
         };
         appointments.push(appt);
-        saveAppointments();
+        saveAppointmentToDB(appt); // 异步写入 Supabase
         saveLastPatient(name, card, isReturn);
 
         showSuccessModal(appt);
@@ -895,15 +989,17 @@
       if (!confirm(`确定取消 ${a.name} ${a.slot==='am'?'上午':'下午'} 的预约吗？`)) return;
 
       appointments[idx].status = 'cancel';
-      saveAppointments();
+      cancelAppointmentInDB(id); // 异步更新 Supabase
       queryAppointments();
       renderCalendar();
       alert('已取消预约');
     }
 
     // ===== 初始化 =====
-    loadData();
-    renderCalendar();
+    (async () => {
+      await loadData();
+      renderCalendar();
+    })();
   </script>
 </body>
 </html>
