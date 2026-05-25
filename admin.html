@@ -811,6 +811,7 @@
     let rules = [];
     let schedule = {}; // dateKey -> { am: {enabled, location, maxSlot}, pm: {...} }
     let appointments = [];
+    let changedApptIds = new Set(); // 跟踪有变更的预约 ID
     let currentMonth = new Date().getMonth();
     let currentYear = new Date().getFullYear();
     let selectedDate = null;
@@ -1053,6 +1054,11 @@
         if (!isSlotBookable(selectedDate, selectedSlot)) { alert('已超过今日17:00，不可预约明天上午'); return; }
         if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { alert('该时段已满额'); return; }
 
+        // 防重复预约：同一卡号同一天同一时段
+        const dateStr = formatDate(selectedDate);
+        const dup = appointments.find(a => a.card === card && a.date === dateStr && a.slot === selectedSlot && a.status !== 'cancel');
+        if (dup) { alert('该患者已预约了该日期及时段，请勿重复预约'); return; }
+
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2),
           name, card, note, isReturn,
@@ -1191,6 +1197,7 @@
         if (!a) { alert('未找到预约记录'); return; }
         a.status = status;
         a[`${status}At`] = new Date().toISOString();
+        changedApptIds.add(id); // 标记为已变更
         // 直接同步到 Supabase
         sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status } }).catch(e => console.error('Sync status to Supabase failed', e));
         saveData();
@@ -1212,6 +1219,7 @@
 
         a.status = 'cancel';
         a.cancelAt = new Date().toISOString();
+        changedApptIds.add(id); // 标记为已变更
         // 直接同步到 Supabase
         sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status: 'cancel' } }).catch(e => console.error('Sync cancel to Supabase failed', e));
         saveData();
@@ -1530,13 +1538,17 @@
       } catch(e) { console.error('Save holidays to Supabase failed', e); }
 
       try {
-        for (const a of appointments) {
-          await sbFetch('appointments', {
-            method: 'PATCH',
-            query: `?id=eq.${a.id}`,
-            body: { status: a.status }
-          });
+        for (const id of changedApptIds) {
+          const a = appointments.find(x => x.id === id);
+          if (a) {
+            await sbFetch('appointments', {
+              method: 'PATCH',
+              query: `?id=eq.${id}`,
+              body: { status: a.status }
+            });
+          }
         }
+        changedApptIds.clear(); // 同步后清空
       } catch(e) { console.error('Save appointments to Supabase failed', e); }
     }
 
