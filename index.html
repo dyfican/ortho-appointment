@@ -907,6 +907,11 @@
         if (!isSlotBookable(selectedDate, selectedSlot)) { alert('已超过今日17:00，不可预约明天上午'); return; }
         if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { alert('该时段已满额'); return; }
 
+        // 防重复预约：同一卡号同一天同一时段
+        const dateStr = formatDate(selectedDate);
+        const dup = appointments.find(a => a.card === card && a.date === dateStr && a.slot === selectedSlot && a.status !== 'cancel');
+        if (dup) { alert('您已预约了该日期及时段，请勿重复预约'); return; }
+
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2,5),
           name, card, note, isReturn,
