@@ -625,11 +625,10 @@
     // ===== 保存预约到 Supabase =====
     async function saveAppointmentToDB(appt) {
       try {
-        await sbFetch('appointments', {
+        const result = await sbFetch('appointments', {
           method: 'POST',
           body: {
-            id: parseInt(appt.id, 36) || undefined,
-            date: appt.date,
+            date: appt.date,  // 已经是 YYYY-MM-DD 格式
             slot: appt.slot,
             patient_name: appt.name,
             patient_card: appt.card,
@@ -638,9 +637,15 @@
             status: 'booked'
           }
         });
+        // 用 Supabase 返回的真实 ID 替换本地 ID
+        if (result && result.length > 0) {
+          appt.id = result[0].id.toString();
+          // 更新本地 appointments 数组中的 ID
+          const idx = appointments.findIndex(a => a.createdAt === appt.createdAt && a.name === appt.name);
+          if (idx >= 0) appointments[idx].id = appt.id;
+        }
       } catch(e) {
         console.error('Save to Supabase failed, saving locally', e);
-        // 兜底：存到 localStorage
         localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
       }
     }
@@ -744,8 +749,8 @@
     }
 
     function getSlotCount(date, slot) {
-      const dateStr = date.toDateString();
-      return appointments.filter(a => a.date===dateStr && a.slot===slot && a.status!=='cancel').length;
+      const dateStr = formatDate(date);  // YYYY-MM-DD 格式，匹配 Supabase 存储
+      return appointments.filter(a => a.date === dateStr && a.slot === slot && a.status !== 'cancel').length;
     }
 
     // ===== 日历渲染 =====
@@ -892,7 +897,7 @@
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2,5),
           name, card, note, isReturn,
-          date: selectedDate.toDateString(),
+          date: formatDate(selectedDate),  // YYYY-MM-DD 格式，匹配 Supabase date 列
           slot: selectedSlot,
           location: cfg.location,
           status: 'booked',
