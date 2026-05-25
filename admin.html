@@ -1191,6 +1191,8 @@
         if (!a) { alert('未找到预约记录'); return; }
         a.status = status;
         a[`${status}At`] = new Date().toISOString();
+        // 直接同步到 Supabase
+        sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status } }).catch(e => console.error('Sync status to Supabase failed', e));
         saveData();
         renderAppointmentList();
         renderCalendar();
@@ -1210,6 +1212,8 @@
 
         a.status = 'cancel';
         a.cancelAt = new Date().toISOString();
+        // 直接同步到 Supabase
+        sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status: 'cancel' } }).catch(e => console.error('Sync cancel to Supabase failed', e));
         saveData();
         renderAppointmentList();
         renderCalendar();
@@ -1250,13 +1254,16 @@
       const end = new Date(start);
       end.setMonth(end.getMonth() + months);
 
+      const generatedDates = [];
       for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
         const key = getDateKey(d);
         if (!schedule[key]) {
           schedule[key] = generateScheduleForDate(d);
         }
+        generatedDates.push(key);
       }
       saveData();
+      syncScheduleOverrides(generatedDates); // 只同步批量生成的日期
       closeModal('batchModal');
       renderCalendar();
       alert(`已生成从 ${startDateStr} 起 ${months} 个月的排班`);
@@ -1332,7 +1339,12 @@
     }
 
     function saveDayConfig() {
+      // 收集当前月份所有手动配置的日期
+      const grid = document.getElementById('dayConfigGrid');
+      const items = grid.querySelectorAll('.day-config-item[data-date]');
+      const dates = Array.from(items).map(el => el.dataset.date);
       saveData();
+      syncScheduleOverrides(dates); // 只同步手动配置的日期
       closeModal('dayConfigModal');
       renderCalendar();
       alert('逐日设置已保存');
@@ -1528,6 +1540,29 @@
       } catch(e) { console.error('Save appointments to Supabase failed', e); }
     }
 
+    // ===== 同步指定日期的排班覆盖到 Supabase =====
+    async function syncScheduleOverrides(dates) {
+      try {
+        for (const dateKey of dates) {
+          const ds = schedule[dateKey];
+          if (!ds) continue;
+          await sbFetch('schedule_overrides', {
+            method: 'POST',
+            query: '?on_conflict=date',
+            body: {
+              date: dateKey,
+              am_enabled: ds.am.enabled,
+              am_location: ds.am.location,
+              am_max: ds.am.maxSlot,
+              pm_enabled: ds.pm.enabled,
+              pm_location: ds.pm.location,
+              pm_max: ds.pm.maxSlot
+            }
+          });
+        }
+      } catch(e) { console.error('Sync schedule overrides to Supabase failed', e); }
+    }
+
     // ===== 保存单条预约到 Supabase =====
     async function saveAppointmentToDB(appt) {
       try {
@@ -1601,8 +1636,20 @@
         if (a) appointments = JSON.parse(a);
       }
 
-      const s = localStorage.getItem('ortho_v3_schedule');
-      if (s) schedule = JSON.parse(s);
+      // schedule 以 Supabase 为准，不再从 localStorage 加载（避免旧数据覆盖规则）
+
+      // 从 Supabase 加载逐日排班覆盖
+      try {
+        const sbOverrides = await sbFetch('schedule_overrides', { query: '?select=*' });
+        if (sbOverrides && sbOverrides.length > 0) {
+          sbOverrides.forEach(o => {
+            schedule[o.date] = {
+              am: { enabled: o.am_enabled, location: o.am_location, maxSlot: o.am_max },
+              pm: { enabled: o.pm_enabled, location: o.pm_location, maxSlot: o.pm_max }
+            };
+          });
+        }
+      } catch(e) { console.warn('Supabase schedule overrides load failed', e); }
     }
 
     // ===== 导出导入 =====
