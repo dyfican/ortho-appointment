@@ -1026,7 +1026,7 @@
     }
 
     function getSlotCount(date, slot) {
-      const dateStr = date.toDateString();
+      const dateStr = formatDate(date);  // YYYY-MM-DD 格式
       return appointments.filter(a => a.date === dateStr && a.slot === slot && a.status !== 'cancel').length;
     }
 
@@ -1056,7 +1056,7 @@
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2),
           name, card, note, isReturn,
-          date: selectedDate.toDateString(),
+          date: formatDate(selectedDate),  // YYYY-MM-DD 格式
           slot: selectedSlot,
           location: cfg.location,
           status: 'booked',
@@ -1064,6 +1064,7 @@
         };
         appointments.push(appt);
         saveData();
+        saveAppointmentToDB(appt); // 异步写入 Supabase
 
         showSuccessModal(appt);
         renderCalendar();
@@ -1226,11 +1227,12 @@
     }
 
     function updateStats() {
-      const today = new Date().toDateString();
+      const today = formatDate(new Date());  // YYYY-MM-DD 格式
       const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekStartStr = formatDate(weekStart);
       document.getElementById('totalAppt').textContent = appointments.length;
       document.getElementById('todayAppt').textContent = appointments.filter(a => a.date === today).length;
-      document.getElementById('weekAppt').textContent = appointments.filter(a => new Date(a.date) >= weekStart).length;
+      document.getElementById('weekAppt').textContent = appointments.filter(a => a.date >= weekStartStr).length;
       document.getElementById('arrivedAppt').textContent = appointments.filter(a => a.date === today && a.status === 'arrived').length;
       document.getElementById('southAppt').textContent = appointments.filter(a => a.location === 'south' && a.status !== 'cancel').length;
       document.getElementById('eastAppt').textContent = appointments.filter(a => a.location === 'east' && a.status !== 'cancel').length;
@@ -1524,6 +1526,32 @@
           });
         }
       } catch(e) { console.error('Save appointments to Supabase failed', e); }
+    }
+
+    // ===== 保存单条预约到 Supabase =====
+    async function saveAppointmentToDB(appt) {
+      try {
+        const result = await sbFetch('appointments', {
+          method: 'POST',
+          body: {
+            date: appt.date,  // YYYY-MM-DD 格式
+            slot: appt.slot,
+            patient_name: appt.name,
+            patient_card: appt.card,
+            is_return: appt.isReturn,
+            location: appt.location,
+            status: 'booked'
+          }
+        });
+        if (result && result.length > 0) {
+          appt.id = result[0].id.toString();
+          const idx = appointments.findIndex(a => a.createdAt === appt.createdAt && a.name === appt.name);
+          if (idx >= 0) appointments[idx].id = appt.id;
+        }
+      } catch(e) {
+        console.error('Save appointment to Supabase failed', e);
+        localStorage.setItem('ortho_v3_appointments', JSON.stringify(appointments));
+      }
     }
 
     async function loadData() {
