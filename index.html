@@ -617,6 +617,19 @@
         console.warn('Supabase appointments load failed', e);
       }
 
+      // 从 Supabase 加载逐日排班覆盖
+      try {
+        const sbOverrides = await sbFetch('schedule_overrides', { query: '?select=*' });
+        if (sbOverrides && sbOverrides.length > 0) {
+          sbOverrides.forEach(o => {
+            schedule[o.date] = {
+              am: { enabled: o.am_enabled, location: o.am_location, maxSlot: o.am_max },
+              pm: { enabled: o.pm_enabled, location: o.pm_location, maxSlot: o.pm_max }
+            };
+          });
+        }
+      } catch(e) { console.warn('Supabase schedule overrides load failed', e); }
+
       // 本地记忆功能仍用 localStorage（设备级别，合理）
       loadLastPatient();
       renderRecentPatients();
