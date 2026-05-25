@@ -754,6 +754,22 @@
   </div>
 
   <script>
+    // ===== Supabase 配置 =====
+    const SB_URL = 'https://bdfwzfwgjtqjbouutlnd.supabase.co';
+    const SB_KEY = 'sb_publishable_sCup7QMIEVdad6Lo22hP7g_lTqs-viR';
+
+    async function sbFetch(table, opts = {}) {
+      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
+      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
+      if (opts.method === 'POST' || opts.method === 'PATCH' || opts.method === 'PUT') {
+        headers['Content-Type'] = 'application/json';
+        headers['Prefer'] = 'return=representation';
+      }
+      const resp = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+      if (!resp.ok) throw new Error(`Supabase ${table} error: ${resp.status}`);
+      return opts.method === 'DELETE' ? null : resp.json();
+    }
+
     // ===== 2026年法定节假日（默认） =====
     let holidays = [
       '2026-01-01', '2026-01-02', '2026-01-03',
@@ -1465,27 +1481,100 @@
       document.getElementById('tab-' + tab).classList.add('active');
     }
 
-    // ===== 数据持久化 =====
-    function saveData() {
+    // ===== 数据持久化（Supabase 优先） =====
+    async function saveData() {
+      // 先同步保存到本地（即时备份）
       localStorage.setItem('ortho_v3_rules', JSON.stringify(rules));
       localStorage.setItem('ortho_v3_schedule', JSON.stringify(schedule));
       localStorage.setItem('ortho_v3_appointments', JSON.stringify(appointments));
       localStorage.setItem('ortho_v3_holidays', JSON.stringify(holidays));
+
+      // 异步推送到 Supabase
+      try {
+        for (const r of rules) {
+          await sbFetch('schedule_rules', {
+            method: 'PATCH',
+            query: `?id=eq.${r.id}`,
+            body: {
+              name: r.name, days_of_week: r.daysOfWeek, location: r.location,
+              start_date: r.startDate, interval_weeks: r.intervalWeeks,
+              am_enabled: r.amEnabled, am_max: r.amMax,
+              pm_enabled: r.pmEnabled, pm_max: r.pmMax
+            }
+          });
+        }
+      } catch(e) { console.error('Save rules to Supabase failed', e); }
+
+      try {
+        for (const d of holidays) {
+          await sbFetch('holidays', {
+            method: 'POST',
+            query: '?on_conflict=date',
+            body: { date: d }
+          });
+        }
+      } catch(e) { console.error('Save holidays to Supabase failed', e); }
+
+      try {
+        for (const a of appointments) {
+          await sbFetch('appointments', {
+            method: 'PATCH',
+            query: `?id=eq.${a.id}`,
+            body: { status: a.status }
+          });
+        }
+      } catch(e) { console.error('Save appointments to Supabase failed', e); }
     }
 
-    function loadData() {
-      const r = localStorage.getItem('ortho_v3_rules');
-      if (r) rules = JSON.parse(r);
-      else rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+    async function loadData() {
+      try {
+        const sbRules = await sbFetch('schedule_rules', { query: '?select=*' });
+        if (sbRules && sbRules.length > 0) {
+          rules = sbRules.map(r => ({
+            id: r.id, name: r.name,
+            daysOfWeek: r.days_of_week, location: r.location,
+            startDate: r.start_date, intervalWeeks: r.interval_weeks,
+            amEnabled: r.am_enabled, amMax: r.am_max,
+            pmEnabled: r.pm_enabled, pmMax: r.pm_max
+          }));
+        } else {
+          const r = localStorage.getItem('ortho_v3_rules');
+          rules = r ? JSON.parse(r) : JSON.parse(JSON.stringify(DEFAULT_RULES));
+        }
+      } catch(e) {
+        const r = localStorage.getItem('ortho_v3_rules');
+        rules = r ? JSON.parse(r) : JSON.parse(JSON.stringify(DEFAULT_RULES));
+      }
+
+      try {
+        const sbHolidays = await sbFetch('holidays', { query: '?select=date' });
+        if (sbHolidays && sbHolidays.length > 0) {
+          holidays = sbHolidays.map(h => h.date);
+        } else {
+          const h = localStorage.getItem('ortho_v3_holidays');
+          if (h) holidays = JSON.parse(h);
+        }
+      } catch(e) {
+        const h = localStorage.getItem('ortho_v3_holidays');
+        if (h) holidays = JSON.parse(h);
+      }
+
+      try {
+        const sbAppts = await sbFetch('appointments', { query: '?select=*&order=created_at.desc' });
+        if (sbAppts) {
+          appointments = sbAppts.map(a => ({
+            id: a.id.toString(), name: a.patient_name, card: a.patient_card,
+            note: '', isReturn: a.is_return, date: a.date, slot: a.slot,
+            location: a.location, status: a.status || 'booked', createdAt: a.created_at
+          }));
+        }
+      } catch(e) {
+        const a = localStorage.getItem('ortho_v3_appointments');
+        if (a) appointments = JSON.parse(a);
+      }
 
       const s = localStorage.getItem('ortho_v3_schedule');
       if (s) schedule = JSON.parse(s);
-
-      const a = localStorage.getItem('ortho_v3_appointments');
-      if (a) appointments = JSON.parse(a);
-
-      const h = localStorage.getItem('ortho_v3_holidays');
-      if (h) holidays = JSON.parse(h);
     }
 
     // ===== 导出导入 =====
@@ -1536,11 +1625,13 @@
     }
 
     // ===== 初始化 =====
-    loadData();
-    renderCalendar();
-    renderAppointmentList();
-    updateStats();
-    renderRuleList();
+    (async () => {
+      await loadData();
+      renderCalendar();
+      renderAppointmentList();
+      updateStats();
+      renderRuleList();
+    })();
   </script>
 </body>
 </html>
