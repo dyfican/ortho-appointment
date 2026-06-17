@@ -604,7 +604,7 @@
         if (sbAppts) {
           appointments = sbAppts.map(a => ({
             id: a.id.toString(), name: a.patient_name, card: a.patient_card,
-            note: '', isReturn: a.is_return, date: a.date, slot: a.slot,
+            note: a.note || '', age: a.age || null, isReturn: a.is_return, date: a.date, slot: a.slot,
             location: a.location, status: a.status || 'booked', createdAt: a.created_at
           }));
           // 也加载已取消的
@@ -613,7 +613,7 @@
             cancelled.forEach(a => {
               appointments.push({
                 id: a.id.toString(), name: a.patient_name, card: a.patient_card,
-                note: '', isReturn: a.is_return, date: a.date, slot: a.slot,
+                note: a.note || '', age: a.age || null, isReturn: a.is_return, date: a.date, slot: a.slot,
                 location: a.location, status: 'cancel', createdAt: a.created_at
               });
             });
@@ -653,7 +653,9 @@
             patient_card: appt.card,
             is_return: appt.isReturn,
             location: appt.location,
-            status: 'booked'
+            status: 'booked',
+            note: appt.note || '',
+            age: appt.age || null
           }
         });
         // 用 Supabase 返回的真实 ID 替换本地 ID
