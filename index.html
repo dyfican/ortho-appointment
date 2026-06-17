@@ -461,7 +461,11 @@
         </div>
         <div class="form-group">
           <label>就诊卡号</label>
-          <input type="text" id="patientCard" placeholder="请输入卡号" inputmode="numeric">
+          <input type="text" id="patientCard" placeholder="请输入卡号" inputmode="numeric" oninput="autoFillAge()">
+        </div>
+        <div class="form-group">
+          <label>年龄</label>
+          <input type="number" id="patientAge" placeholder="请输入年龄" inputmode="numeric" min="1" max="120">
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="isReturnVisit">
@@ -540,10 +544,12 @@
 
     // ===== 默认规则（与医生端一致） =====
     const DEFAULT_RULES = [
-      { id:'rule1', name:'周三至周五南部固定', daysOfWeek:[3,4,5], location:'south', startDate:'2026-07-01', intervalWeeks:1, amEnabled:true, amMax:25, pmEnabled:true, pmMax:25 },
-      { id:'rule2', name:'周二东部隔周', daysOfWeek:[2], location:'east', startDate:'2026-07-08', intervalWeeks:2, amEnabled:true, amMax:20, pmEnabled:true, pmMax:5 },
-      { id:'rule3', name:'周六东部每四周', daysOfWeek:[6], location:'east', startDate:'2026-06-13', intervalWeeks:4, amEnabled:true, amMax:20, pmEnabled:true, pmMax:5 },
-      { id:'rule4', name:'周六南部每两周', daysOfWeek:[6], location:'south', startDate:'2026-06-06', intervalWeeks:2, amEnabled:true, amMax:20, pmEnabled:true, pmMax:5 }
+      { id:'rule1', name:'周二东部每周', daysOfWeek:[2], location:'east', startDate:'2026-06-30', intervalWeeks:1, amEnabled:true, amMax:20, pmEnabled:true, pmMax:5 },
+      { id:'rule2', name:'周四周五南部每周', daysOfWeek:[4,5], location:'south', startDate:'2026-07-02', intervalWeeks:1, amEnabled:true, amMax:25, pmEnabled:true, pmMax:25 },
+      { id:'rule3', name:'周六东部（第1周）', daysOfWeek:[6], location:'east', startDate:'2026-06-27', intervalWeeks:4, amEnabled:true, amMax:15, pmEnabled:true, pmMax:10 },
+      { id:'rule4', name:'周六东部（第2周）', daysOfWeek:[6], location:'east', startDate:'2026-07-04', intervalWeeks:4, amEnabled:true, amMax:15, pmEnabled:true, pmMax:10 },
+      { id:'rule5', name:'周六南部（第3周）', daysOfWeek:[6], location:'south', startDate:'2026-07-11', intervalWeeks:4, amEnabled:true, amMax:22, pmEnabled:true, pmMax:3 },
+      { id:'rule6', name:'周六南部（第4周）', daysOfWeek:[6], location:'south', startDate:'2026-07-18', intervalWeeks:4, amEnabled:true, amMax:22, pmEnabled:true, pmMax:3 }
     ];
 
     let rules = [];
@@ -685,12 +691,13 @@
           document.getElementById('patientName').value = p.name || '';
           document.getElementById('patientCard').value = p.card || '';
           document.getElementById('isReturnVisit').checked = p.isReturn || false;
+          if (p.age) document.getElementById('patientAge').value = p.age;
         }
       } catch(e) {}
     }
 
-    function saveLastPatient(name, card, isReturn) {
-      localStorage.setItem(STORAGE_KEYS.lastPatient, JSON.stringify({ name, card, isReturn, time: Date.now() }));
+    function saveLastPatient(name, card, isReturn, age) {
+      localStorage.setItem(STORAGE_KEYS.lastPatient, JSON.stringify({ name, card, isReturn, age, time: Date.now() }));
       addRecentPatient(name, card);
     }
 
@@ -722,6 +729,22 @@
       document.getElementById('patientName').value = name;
       document.getElementById('patientCard').value = card;
       document.getElementById('isReturnVisit').checked = true;
+      autoFillAge();
+    }
+
+    // ===== 年龄记忆（按卡号）=====
+    function getAgeMap() {
+      try { return JSON.parse(localStorage.getItem('ortho_v3_age_map')) || {}; } catch(e) { return {}; }
+    }
+    function setAgeForCard(card, age) {
+      if (!card || !age) return;
+      const m = getAgeMap(); m[card] = age;
+      localStorage.setItem('ortho_v3_age_map', JSON.stringify(m));
+    }
+    function autoFillAge() {
+      const card = document.getElementById('patientCard').value.trim();
+      const m = getAgeMap();
+      if (card && m[card]) document.getElementById('patientAge').value = m[card];
     }
 
     // ===== 规则匹配 =====
@@ -764,6 +787,17 @@
     function getSlotCount(date, slot) {
       const dateStr = formatDate(date);  // YYYY-MM-DD 格式，匹配 Supabase 存储
       return appointments.filter(a => a.date === dateStr && a.slot === slot && a.status !== 'cancel').length;
+    }
+
+    // ===== 周六预约频次限制（按年龄比例）=====
+    // 10-18岁：每2次预约最多1次周六（N=2）；其他：每3次最多1次周六（N=3）
+    // 允许条件：N * 已约周六次数 < 总次数 + 1
+    function canBookSaturday(card, age) {
+      const mine = appointments.filter(a => a.card === card && a.status !== 'cancel');
+      const T = mine.length;
+      const S = mine.filter(a => new Date(a.date).getDay() === 6).length;
+      const N = (age >= 10 && age <= 18) ? 2 : 3;
+      return { allowed: N * S < T + 1, N, S, T };
     }
 
     // ===== 日历渲染 =====
@@ -852,11 +886,15 @@
 
       const amBookable = isSlotBookable(date, 'am');
       const pmBookable = isSlotBookable(date, 'pm');
-      const amFull = ds.am.enabled && getSlotCount(date, 'am') >= ds.am.maxSlot;
-      const pmFull = ds.pm.enabled && getSlotCount(date, 'pm') >= ds.pm.maxSlot;
+      const amCount = getSlotCount(date, 'am');
+      const pmCount = getSlotCount(date, 'pm');
+      const amFull = ds.am.enabled && amCount >= ds.am.maxSlot;
+      const pmFull = ds.pm.enabled && pmCount >= ds.pm.maxSlot;
+      const amRemaining = ds.am.enabled ? Math.max(0, ds.am.maxSlot - amCount) : 0;
+      const pmRemaining = ds.pm.enabled ? Math.max(0, ds.pm.maxSlot - pmCount) : 0;
 
-      document.getElementById('amLoc').textContent = ds.am.enabled ? getLocName(ds.am.location) + (amFull ? ' (已满)' : '') : '停诊';
-      document.getElementById('pmLoc').textContent = ds.pm.enabled ? getLocName(ds.pm.location) + (pmFull ? ' (已满)' : '') : '停诊';
+      document.getElementById('amLoc').textContent = ds.am.enabled ? `${getLocName(ds.am.location)} · 剩余${amRemaining}/${ds.am.maxSlot}${amFull ? '（已满）' : ''}` : '停诊';
+      document.getElementById('pmLoc').textContent = ds.pm.enabled ? `${getLocName(ds.pm.location)} · 剩余${pmRemaining}/${ds.pm.maxSlot}${pmFull ? '（已满）' : ''}` : '停诊';
 
       if (!ds.am.enabled || !amBookable || amFull) amOpt.classList.add('closed');
       if (!ds.pm.enabled || !pmBookable || pmFull) pmOpt.classList.add('closed');
@@ -896,9 +934,11 @@
         const card = document.getElementById('patientCard').value.trim();
         const note = document.getElementById('patientNote').value.trim();
         const isReturn = document.getElementById('isReturnVisit').checked;
+        const age = parseInt(document.getElementById('patientAge').value);
 
         if (!name) { alert('请输入患者姓名'); return; }
         if (!card) { alert('请输入就诊卡号'); return; }
+        if (!age || age < 1 || age > 120) { alert('请填写有效的年龄'); return; }
         if (!selectedDate || !selectedSlot) { alert('请先选择日期和时段'); return; }
 
         const ds = getDaySchedule(selectedDate);
@@ -912,9 +952,19 @@
         const dup = appointments.find(a => a.card === card && a.date === dateStr && a.slot === selectedSlot && a.status !== 'cancel');
         if (dup) { alert('您已预约了该日期及时段，请勿重复预约'); return; }
 
+        // 周六预约频次限制（按年龄比例）
+        if (selectedDate.getDay() === 6) {
+          const r = canBookSaturday(card, age);
+          if (!r.allowed) {
+            const ruleTxt = r.N === 2 ? '每2次预约最多1次周六' : '每3次预约最多1次周六';
+            alert(`该年龄段${ruleTxt}。\n\n您已预约 ${r.T} 次（其中周六 ${r.S} 次），暂不可再预约周六，请选择周二/周四/周五。`);
+            return;
+          }
+        }
+
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2,5),
-          name, card, note, isReturn,
+          name, card, note, isReturn, age,
           date: formatDate(selectedDate),  // YYYY-MM-DD 格式，匹配 Supabase date 列
           slot: selectedSlot,
           location: cfg.location,
@@ -923,7 +973,8 @@
         };
         appointments.push(appt);
         saveAppointmentToDB(appt); // 异步写入 Supabase
-        saveLastPatient(name, card, isReturn);
+        saveLastPatient(name, card, isReturn, age);
+        setAgeForCard(card, age);
 
         showSuccessModal(appt);
         renderCalendar();
@@ -947,6 +998,7 @@
       document.getElementById('voucherContent').innerHTML = `
         <p><strong>患者：</strong>${appt.name} ${appt.isReturn?'(复诊)':'(初诊)'}</p>
         <p><strong>卡号：</strong>${appt.card}</p>
+        <p><strong>年龄：</strong>${appt.age||'—'}岁</p>
         <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
         <p><strong>地点：</strong>${getLocName(appt.location)}院区</p>
         ${appt.note?`<p><strong>备注：</strong>${appt.note}</p>`:''}
