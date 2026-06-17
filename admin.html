@@ -1129,6 +1129,7 @@
       document.getElementById('modalInfo').innerHTML = `
         <p><strong>患者：</strong>${appt.name} ${appt.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}</p>
         <p><strong>卡号：</strong>${appt.card}</p>
+        <p><strong>年龄：</strong>${appt.age || '—'}岁</p>
         <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
         <p><strong>地点：</strong>${getLocationName(appt.location)}</p>
         <p><strong>预约ID：</strong>${appt.id}</p>
@@ -1176,6 +1177,7 @@
         return `<div class="appt-item" data-aid="${safeId}">
           <div class="appt-info">
             <div class="appt-name">${a.name} <span style="font-weight:normal;color:#718096">(${a.card})</span>
+              ${a.age ? '<span class="badge" style="background:#E6F1FB;color:#0C447C;">'+a.age+'岁</span>' : ''}
               ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
               <span class="appt-status ${s.cls}">${s.text}</span>
             </div>
@@ -1648,7 +1650,9 @@
             patient_card: appt.card,
             is_return: appt.isReturn,
             location: appt.location,
-            status: 'booked'
+            status: 'booked',
+            note: appt.note || '',
+            age: appt.age || null
           }
         });
         if (result && result.length > 0) {
@@ -1700,7 +1704,7 @@
         if (sbAppts) {
           appointments = sbAppts.map(a => ({
             id: a.id.toString(), name: a.patient_name, card: a.patient_card,
-            note: '', isReturn: a.is_return, date: a.date, slot: a.slot,
+            note: a.note || '', age: a.age || null, isReturn: a.is_return, date: a.date, slot: a.slot,
             location: a.location, status: a.status || 'booked', createdAt: a.created_at
           }));
         }
