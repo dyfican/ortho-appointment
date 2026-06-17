@@ -833,8 +833,7 @@
         el.className = 'day-cell';
         if (isToday) el.classList.add('today');
         if (isHol) el.classList.add('holiday');
-        if (!hasSchedule) el.classList.add('no-schedule');
-        if (isBookable && (isPast || isBeyondLimit)) el.classList.add('no-schedule');
+        if (!hasSchedule || isPast || isBeyondLimit) el.classList.add('no-schedule');
         if (selectedDate && date.getTime() === selectedDate.getTime()) el.classList.add('selected');
 
         let locText = '';
