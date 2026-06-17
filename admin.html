@@ -501,7 +501,7 @@
     <header>
       <h1>段医生正畸门诊 · 管理后台</h1>
       <p>批量排班 · 逐日设置 · 预约管理 · 导入导出</p>
-      <p style="margin-top:6px;"><a href="patient.html" style="color:#fed7d7;font-size:12px;text-decoration:underline;">切换到患者预约端</a></p>
+      <p style="margin-top:6px;"><a href="index.html" style="color:#fed7d7;font-size:12px;text-decoration:underline;">切换到患者预约端</a></p>
     </header>
 
     <div class="top-bar">
@@ -573,7 +573,10 @@
 
           <div id="tab-rules" class="tab-content">
             <div id="ruleList"></div>
-            <button class="btn-green" style="margin-top:10px;width:auto;padding:7px 16px;" onclick="showAddRuleModal()">+ 添加规则</button>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-green" style="width:auto;padding:7px 16px;" onclick="showAddRuleModal()">+ 添加规则</button>
+              <button class="btn-orange" style="width:auto;padding:7px 16px;" onclick="resetRulesToDefault()">恢复默认排班规则</button>
+            </div>
             <div class="note-text" style="margin-top:12px;">
               规则说明：系统按规则列表从上到下匹配，手动逐日设置的日期优先级最高，不会被规则覆盖。<br>
               修改规则后，需点击「批量排班」重新生成排班表。
@@ -783,28 +786,40 @@
     // ===== 默认规则 =====
     const DEFAULT_RULES = [
       {
-        id: 'rule1', name: '周三至周五南部固定',
-        daysOfWeek: [3, 4, 5], location: 'south',
-        startDate: '2026-07-01', intervalWeeks: 1,
+        id: 'rule1', name: '周二东部每周',
+        daysOfWeek: [2], location: 'east',
+        startDate: '2026-06-30', intervalWeeks: 1,
+        amEnabled: true, amMax: 20, pmEnabled: true, pmMax: 5
+      },
+      {
+        id: 'rule2', name: '周四周五南部每周',
+        daysOfWeek: [4, 5], location: 'south',
+        startDate: '2026-07-02', intervalWeeks: 1,
         amEnabled: true, amMax: 25, pmEnabled: true, pmMax: 25
       },
       {
-        id: 'rule2', name: '周二东部隔周',
-        daysOfWeek: [2], location: 'east',
-        startDate: '2026-07-08', intervalWeeks: 2,
-        amEnabled: true, amMax: 20, pmEnabled: true, pmMax: 5
-      },
-      {
-        id: 'rule3', name: '周六东部每四周',
+        id: 'rule3', name: '周六东部（第1周）',
         daysOfWeek: [6], location: 'east',
-        startDate: '2026-06-13', intervalWeeks: 4,
-        amEnabled: true, amMax: 20, pmEnabled: true, pmMax: 5
+        startDate: '2026-06-27', intervalWeeks: 4,
+        amEnabled: true, amMax: 15, pmEnabled: true, pmMax: 10
       },
       {
-        id: 'rule4', name: '周六南部每两周',
+        id: 'rule4', name: '周六东部（第2周）',
+        daysOfWeek: [6], location: 'east',
+        startDate: '2026-07-04', intervalWeeks: 4,
+        amEnabled: true, amMax: 15, pmEnabled: true, pmMax: 10
+      },
+      {
+        id: 'rule5', name: '周六南部（第3周）',
         daysOfWeek: [6], location: 'south',
-        startDate: '2026-06-06', intervalWeeks: 2,
-        amEnabled: true, amMax: 20, pmEnabled: true, pmMax: 5
+        startDate: '2026-07-11', intervalWeeks: 4,
+        amEnabled: true, amMax: 22, pmEnabled: true, pmMax: 3
+      },
+      {
+        id: 'rule6', name: '周六南部（第4周）',
+        daysOfWeek: [6], location: 'south',
+        startDate: '2026-07-18', intervalWeeks: 4,
+        amEnabled: true, amMax: 22, pmEnabled: true, pmMax: 3
       }
     ];
 
@@ -1457,6 +1472,52 @@
       rules = rules.filter(r => r.id !== id);
       saveData();
       renderRuleList();
+    }
+
+    // ===== 恢复默认排班规则（清空云端旧规则 + 逐日覆盖，写入新默认规则）=====
+    async function resetRulesToDefault() {
+      if (!confirm('确定恢复为默认排班规则？\n\n这将清空当前所有排班规则和逐日设置，并同步到云端。\n之后请点击「批量排班」重新生成排班表。')) return;
+
+      // 1. 删除现有规则
+      for (const r of rules) {
+        try { await sbFetch('schedule_rules', { method: 'DELETE', query: `?id=eq.${r.id}` }); }
+        catch(e) { console.error('删除规则失败', r.id, e); }
+      }
+
+      // 2. 删除逐日排班覆盖（避免旧覆盖干扰新规则）
+      try {
+        const overrides = await sbFetch('schedule_overrides', { query: '?select=date' });
+        if (overrides && overrides.length > 0) {
+          for (const o of overrides) {
+            try { await sbFetch('schedule_overrides', { method: 'DELETE', query: `?date=eq.${o.date}` }); }
+            catch(e) {}
+          }
+        }
+      } catch(e) { console.warn('读取/删除逐日覆盖失败', e); }
+
+      // 3. 写入新默认规则
+      rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+      schedule = {};
+      localStorage.setItem('ortho_v3_rules', JSON.stringify(rules));
+      localStorage.setItem('ortho_v3_schedule', JSON.stringify(schedule));
+
+      for (const r of rules) {
+        try {
+          await sbFetch('schedule_rules', {
+            method: 'POST',
+            body: {
+              id: r.id, name: r.name, days_of_week: r.daysOfWeek, location: r.location,
+              start_date: r.startDate, interval_weeks: r.intervalWeeks,
+              am_enabled: r.amEnabled, am_max: r.amMax,
+              pm_enabled: r.pmEnabled, pm_max: r.pmMax
+            }
+          });
+        } catch(e) { console.error('写入规则失败', r.id, e); }
+      }
+
+      renderRuleList();
+      renderCalendar();
+      alert('已恢复默认排班规则并同步到云端。\n\n请点击「批量排班」重新生成排班表。');
     }
 
     // ===== 节假日管理 =====
