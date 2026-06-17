@@ -775,7 +775,12 @@
       const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'x-admin-key': ADMIN_KEY };
       if (opts.method === 'POST' || opts.method === 'PATCH' || opts.method === 'PUT') {
         headers['Content-Type'] = 'application/json';
-        headers['Prefer'] = 'return=representation';
+        // upsert（on_conflict）需要 merge-duplicates 头，否则重复键会报错
+        if (opts.query && opts.query.includes('on_conflict')) {
+          headers['Prefer'] = 'return=representation, resolution=merge-duplicates';
+        } else {
+          headers['Prefer'] = 'return=representation';
+        }
       }
       const resp = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
       if (!resp.ok) throw new Error(`Supabase ${table} error: ${resp.status}`);
