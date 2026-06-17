@@ -522,6 +522,15 @@
       return opts.method === 'DELETE' ? null : resp.json();
     }
 
+    // ===== RPC 调用（绕过 RLS，只返回必要数据，不泄露他人隐私） =====
+    async function sbRpc(funcName, params = {}) {
+      const url = `${SB_URL}/rest/v1/rpc/${funcName}`;
+      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+      const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(params) });
+      if (!resp.ok) throw new Error(`RPC ${funcName} error: ${resp.status}`);
+      return resp.json();
+    }
+
     // ===== 与医生端共用数据 =====
     const STORAGE_KEYS = {
       rules: 'ortho_v3_rules',
@@ -555,6 +564,7 @@
     let rules = [];
     let schedule = {};
     let appointments = [];
+    let slotCountMap = {};  // { "2026-07-02_am": 5 } 各时段已约数（不含隐私）
     let currentMonth = new Date().getMonth();
     let currentYear = new Date().getFullYear();
     let selectedDate = null;
@@ -599,28 +609,13 @@
       }
 
       try {
-        // 加载预约
-        const sbAppts = await sbFetch('appointments', { query: '?select=*&status=neq.cancel&order=created_at.desc' });
-        if (sbAppts) {
-          appointments = sbAppts.map(a => ({
-            id: a.id.toString(), name: a.patient_name, card: a.patient_card,
-            note: a.note || '', age: a.age || null, isReturn: a.is_return, date: a.date, slot: a.slot,
-            location: a.location, status: a.status || 'booked', createdAt: a.created_at
-          }));
-          // 也加载已取消的
-          const cancelled = await sbFetch('appointments', { query: '?select=*&status=eq.cancel' });
-          if (cancelled) {
-            cancelled.forEach(a => {
-              appointments.push({
-                id: a.id.toString(), name: a.patient_name, card: a.patient_card,
-                note: a.note || '', age: a.age || null, isReturn: a.is_return, date: a.date, slot: a.slot,
-                location: a.location, status: 'cancel', createdAt: a.created_at
-              });
-            });
-          }
+        // 加载各时段已约数（不暴露患者隐私，RLS 已禁止直接读 appointments）
+        const counts = await sbRpc('get_all_slot_counts');
+        if (counts && Array.isArray(counts)) {
+          counts.forEach(c => { slotCountMap[`${c.date}_${c.slot}`] = c.booked_count; });
         }
       } catch(e) {
-        console.warn('Supabase appointments load failed', e);
+        console.warn('Supabase slot counts load failed', e);
       }
 
       // 从 Supabase 加载逐日排班覆盖
@@ -673,11 +668,7 @@
 
     async function cancelAppointmentInDB(id) {
       try {
-        await sbFetch('appointments', {
-          method: 'PATCH',
-          query: `?id=eq.${id}`,
-          body: { status: 'cancel' }
-        });
+        await sbRpc('cancel_appointment_by_id', { p_id: id });
       } catch(e) {
         console.error('Cancel in Supabase failed', e);
         localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
@@ -788,16 +779,16 @@
 
     function getSlotCount(date, slot) {
       const dateStr = formatDate(date);  // YYYY-MM-DD 格式，匹配 Supabase 存储
-      return appointments.filter(a => a.date === dateStr && a.slot === slot && a.status !== 'cancel').length;
+      return slotCountMap[`${dateStr}_${slot}`] || 0;
     }
 
     // ===== 周六预约频次限制（按年龄比例）=====
     // 10-18岁：每2次预约最多1次周六（N=2）；其他：每3次最多1次周六（N=3）
     // 允许条件：N * 已约周六次数 < 总次数 + 1
-    function canBookSaturday(card, age) {
-      const mine = appointments.filter(a => a.card === card && a.status !== 'cancel');
-      const T = mine.length;
-      const S = mine.filter(a => new Date(a.date).getDay() === 6).length;
+    async function canBookSaturday(card, age) {
+      const stats = await sbRpc('get_card_booking_stats', { p_card: card });
+      const T = (stats && stats[0]) ? stats[0].total_count : 0;
+      const S = (stats && stats[0]) ? stats[0].saturday_count : 0;
       const N = (age >= 10 && age <= 18) ? 2 : 3;
       return { allowed: N * S < T + 1, N, S, T };
     }
@@ -930,7 +921,7 @@
     }
 
     // ===== 提交预约 =====
-    function submitBooking() {
+    async function submitBooking() {
       try {
         const name = document.getElementById('patientName').value.trim();
         const card = document.getElementById('patientCard').value.trim();
@@ -949,14 +940,14 @@
         if (!isSlotBookable(selectedDate, selectedSlot)) { alert('已超过今日17:00，不可预约明天上午'); return; }
         if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { alert('该时段已满额'); return; }
 
-        // 防重复预约：同一卡号同一天同一时段
+        // 防重复预约：调 RPC 检查（RLS 已禁止前端直接读 appointments）
         const dateStr = formatDate(selectedDate);
-        const dup = appointments.find(a => a.card === card && a.date === dateStr && a.slot === selectedSlot && a.status !== 'cancel');
-        if (dup) { alert('您已预约了该日期及时段，请勿重复预约'); return; }
+        const isDup = await sbRpc('check_duplicate_booking', { p_card: card, p_date: dateStr, p_slot: selectedSlot });
+        if (isDup) { alert('您已预约了该日期及时段，请勿重复预约'); return; }
 
         // 周六预约频次限制（按年龄比例）
         if (selectedDate.getDay() === 6) {
-          const r = canBookSaturday(card, age);
+          const r = await canBookSaturday(card, age);
           if (!r.allowed) {
             const ruleTxt = r.N === 2 ? '每2次预约最多1次周六' : '每3次预约最多1次周六';
             alert(`该年龄段${ruleTxt}。\n\n您已预约 ${r.T} 次（其中周六 ${r.S} 次），暂不可再预约周六，请选择周二/周四/周五。`);
@@ -974,6 +965,7 @@
           createdAt: new Date().toISOString()
         };
         appointments.push(appt);
+        slotCountMap[`${appt.date}_${appt.slot}`] = (slotCountMap[`${appt.date}_${appt.slot}`] || 0) + 1;
         saveAppointmentToDB(appt); // 异步写入 Supabase
         saveLastPatient(name, card, isReturn, age);
         setAgeForCard(card, age);
@@ -1016,13 +1008,26 @@
     }
 
     // ===== 查询预约 =====
-    function queryAppointments() {
+    async function queryAppointments() {
       const card = document.getElementById('queryCard').value.trim();
       const resultDiv = document.getElementById('queryResult');
 
       if (!card) { resultDiv.innerHTML = '<p style="color:#a0aec0;text-align:center;font-size:13px;">请输入卡号</p>'; return; }
 
-      const list = appointments.filter(a => a.card === card).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // 调 RPC 获取该卡号预约（RLS 已禁止前端直接读 appointments）
+      let list;
+      try {
+        const myAppts = await sbRpc('get_my_appointments', { p_card: card });
+        list = (myAppts || []).map(a => ({
+          id: a.id, name: a.patient_name, date: a.date, slot: a.slot,
+          location: a.location, status: a.status, note: a.note || '',
+          age: a.age, isReturn: a.is_return, createdAt: a.created_at
+        }));
+        appointments = list; // 缓存到本地，供 cancelMyAppt 使用
+      } catch(e) {
+        console.warn('get_my_appointments failed', e);
+        list = [];
+      }
 
       if (list.length === 0) {
         resultDiv.innerHTML = '<p style="color:#a0aec0;text-align:center;font-size:13px;">暂无预约记录</p>';
@@ -1057,7 +1062,7 @@
       }).join('');
     }
 
-    function cancelMyAppt(id) {
+    async function cancelMyAppt(id) {
       const idx = appointments.findIndex(a => a.id === id);
       if (idx === -1) return;
       const a = appointments[idx];
@@ -1066,7 +1071,8 @@
       if (!confirm(`确定取消 ${a.name} ${a.slot==='am'?'上午':'下午'} 的预约吗？`)) return;
 
       appointments[idx].status = 'cancel';
-      cancelAppointmentInDB(id); // 异步更新 Supabase
+      slotCountMap[`${a.date}_${a.slot}`] = Math.max(0, (slotCountMap[`${a.date}_${a.slot}`] || 0) - 1);
+      await cancelAppointmentInDB(id); // RPC 更新 Supabase
       queryAppointments();
       renderCalendar();
       alert('已取消预约');

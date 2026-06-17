@@ -497,6 +497,14 @@
   </style>
 </head>
 <body>
+  <div id="loginOverlay" style="display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;justify-content:center;align-items:center;">
+    <div style="background:#fff;border-radius:12px;padding:30px;width:300px;text-align:center;">
+      <h2 style="margin:0 0 16px;font-size:18px;color:#2d3748;">管理后台登录</h2>
+      <input type="password" id="adminPassword" placeholder="请输入管理密码" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #cbd5e0;border-radius:6px;font-size:14px;box-sizing:border-box;" onkeydown="if(event.key==='Enter')checkAdminLogin()">
+      <button onclick="checkAdminLogin()" style="width:100%;padding:10px;background:#5a67d8;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;">登录</button>
+      <p style="margin-top:10px;font-size:12px;color:#a0aec0;">仅限管理员访问</p>
+    </div>
+  </div>
   <div class="container">
     <header>
       <h1>段医生正畸门诊 · 管理后台</h1>
@@ -761,9 +769,10 @@
     const SB_URL = 'https://bdfwzfwgjtqjbouutlnd.supabase.co';
     const SB_KEY = 'sb_publishable_sCup7QMIEVdad6Lo22hP7g_lTqs-viR';
 
+    const ADMIN_KEY = 'Jy9Ortho2026!';
     async function sbFetch(table, opts = {}) {
       const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
-      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
+      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'x-admin-key': ADMIN_KEY };
       if (opts.method === 'POST' || opts.method === 'PATCH' || opts.method === 'PUT') {
         headers['Content-Type'] = 'application/json';
         headers['Prefer'] = 'return=representation';
@@ -1773,6 +1782,22 @@
       if (el) {
         el.classList.remove('active');
         el.style.display = 'none';
+      }
+    }
+
+    // ===== 登录验证 =====
+    (function() {
+      if (sessionStorage.getItem('ortho_admin_login') === 'yes') {
+        document.getElementById('loginOverlay').style.display = 'none';
+      }
+    })();
+    function checkAdminLogin() {
+      const pwd = document.getElementById('adminPassword').value;
+      if (pwd === ADMIN_KEY) {
+        sessionStorage.setItem('ortho_admin_login', 'yes');
+        document.getElementById('loginOverlay').style.display = 'none';
+      } else {
+        alert('密码错误');
       }
     }
 
