@@ -823,12 +823,18 @@
         const isToday = date.getTime() === today.getTime();
         const isHol = holidays.includes(dateStr);
         const hasSchedule = ds.am.enabled || ds.pm.enabled;
+        // 只允许预约今天起 2 个月内的日期
+        const twoMonthsLater = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
+        const isBeyondLimit = date > twoMonthsLater;
+        const isPast = date < today;
+        const isBookable = hasSchedule && !isHol && !isPast && !isBeyondLimit;
 
         const el = document.createElement('div');
         el.className = 'day-cell';
         if (isToday) el.classList.add('today');
         if (isHol) el.classList.add('holiday');
         if (!hasSchedule) el.classList.add('no-schedule');
+        if (isBookable && (isPast || isBeyondLimit)) el.classList.add('no-schedule');
         if (selectedDate && date.getTime() === selectedDate.getTime()) el.classList.add('selected');
 
         let locText = '';
@@ -836,7 +842,7 @@
         if (ds.pm.enabled) locText += `<span class="loc-${ds.pm.location}">下午${ds.pm.location==='south'?'南':'东'}</span>`;
 
         el.innerHTML = `<span class="day-num">${d}</span><div class="day-loc">${locText}</div>`;
-        if (hasSchedule) {
+        if (isBookable) {
           el.onclick = () => selectDate(date);
         }
         grid.appendChild(el);
@@ -933,6 +939,13 @@
         if (!card) { alert('请输入就诊卡号'); return; }
         if (!age || age < 1 || age > 120) { alert('请填写有效的年龄'); return; }
         if (!selectedDate || !selectedSlot) { alert('请先选择日期和时段'); return; }
+
+        // 日期范围校验（今天起 2 个月内）
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const twoMonthsLater = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
+        if (selectedDate < today) { alert('不能预约过去的日期'); return; }
+        if (selectedDate > twoMonthsLater) { alert('只能预约2个月内的日期'); return; }
 
         const ds = getDaySchedule(selectedDate);
         const cfg = ds[selectedSlot];
