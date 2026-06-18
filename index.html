@@ -960,12 +960,12 @@
         const isDup = await sbRpc('check_duplicate_booking', { p_card: card, p_date: dateStr, p_slot: selectedSlot });
         if (isDup) { alert('您已预约了该日期及时段，请勿重复预约'); return; }
 
-        // 周六预约频次限制（按年龄比例）
-        if (selectedDate.getDay() === 6) {
+        // 周六预约频次限制（按年龄比例，仅南部院区）
+        if (selectedDate.getDay() === 6 && cfg.location === 'south') {
           const r = await canBookSaturday(card, age);
           if (!r.allowed) {
             const ruleTxt = r.N === 2 ? '每2次预约最多1次周六' : '每3次预约最多1次周六';
-            alert(`该年龄段${ruleTxt}。\n\n您已预约 ${r.T} 次（其中周六 ${r.S} 次），暂不可再预约周六，请选择周二/周四/周五。`);
+            alert(`该年龄段${ruleTxt}（南部院区）。\n\n您已预约 ${r.T} 次（其中周六 ${r.S} 次），暂不可再预约南部周六，请选择其他时段或其他院区。`);
             return;
           }
         }
