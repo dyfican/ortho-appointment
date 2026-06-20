@@ -1374,40 +1374,31 @@
       } else if (field === 'maxSlot') {
         schedule[dateStr][half].maxSlot = parseInt(value) || 0;
       }
-      renderDayConfigGrid();
+      // 不再调用 renderDayConfigGrid()，避免 DOM 元素被替换
     }
 
     function saveDayConfig() {
-      // ⚠️ 关键修复：保存前必须从 DOM 强制读取所有最新值，不能只依赖 onchange 事件
-      // （用户可能改了数字后直接点保存，input 还没失焦，onchange 没触发）
+      // 强制让当前焦点元素失焦，触发 onchange，确保 schedule 是最新的
+      if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT')) {
+        document.activeElement.blur();
+      }
+      // schedule 已经被 updateDayHalfConfig 实时更新，直接使用
       const grid = document.getElementById('dayConfigGrid');
       const items = grid.querySelectorAll('.day-config-item[data-date]');
+      const dates = Array.from(items).map(el => el.dataset.date);
+      // 二次保险：遍历 DOM 再同步一次（处理极端情况）
       items.forEach(el => {
         const dateKey = el.dataset.date;
-        const amLocSel = el.querySelector('select[onchange*="\'am\', \'location\'"]');
-        const amMaxInput = el.querySelector('input[onchange*="\'am\', \'maxSlot\'"]');
-        const pmLocSel = el.querySelector('select[onchange*="\'pm\', \'location\'"]');
-        const pmMaxInput = el.querySelector('input[onchange*="\'pm\', \'maxSlot\'"]');
-
-        if (!schedule[date]) {
-          const d = new Date(dateKey);
-          schedule[dateKey] = generateScheduleForDate(d);
-        }
-
-        // 强制读取当前 DOM 值
-        if (amLocSel) {
-          schedule[dateKey].am.location = amLocSel.value || null;
-          schedule[dateKey].am.enabled = !!amLocSel.value;
-        }
-        if (amMaxInput) schedule[dateKey].am.maxSlot = parseInt(amMaxInput.value) || 0;
-        if (pmLocSel) {
-          schedule[dateKey].pm.location = pmLocSel.value || null;
-          schedule[dateKey].pm.enabled = !!pmLocSel.value;
-        }
-        if (pmMaxInput) schedule[dateKey].pm.maxSlot = parseInt(pmMaxInput.value) || 0;
+        if (!schedule[dateKey]) return;
+        const selects = el.querySelectorAll('select');
+        const inputs  = el.querySelectorAll('input[type="number"]');
+        if (selects[0]) schedule[dateKey].am.location = selects[0].value || null;
+        if (selects[0]) schedule[dateKey].am.enabled = !!selects[0].value;
+        if (selects[1]) schedule[dateKey].pm.location = selects[1].value || null;
+        if (selects[1]) schedule[dateKey].pm.enabled = !!selects[1].value;
+        if (inputs[0]) schedule[dateKey].am.maxSlot = Math.max(0, parseInt(inputs[0].value) || 0);
+        if (inputs[1]) schedule[dateKey].pm.maxSlot = Math.max(0, parseInt(inputs[1].value) || 0);
       });
-
-      const dates = Array.from(items).map(el => el.dataset.date);
       saveData();
       syncScheduleOverrides(dates).then(() => {
         closeModal('dayConfigModal');
