@@ -219,6 +219,7 @@
     .time-option.closed { opacity: 0.35; cursor: not-allowed; background: #e2e8f0; border-color: #cbd5e0; }
     .time-option .time-label { font-weight: 600; font-size: 12px; }
     .time-option .time-count { font-size: 11px; color: #718096; margin-top: 2px; }
+    .time-addr { font-size: 10px; color: #e53e3e; margin-top: 2px; line-height: 1.3; }
     .time-option .time-loc { font-size: 10px; color: #4a5568; margin-top: 2px; }
     .deadline-warning {
       background: #fed7d7;
@@ -472,6 +473,58 @@
     .badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 3px; }
     .badge-return { background: #e9d8fd; color: #553c9a; }
     .badge-new { background: #c6f6d5; color: #22543d; }
+    .badge-booked { background: #bee3f8; color: #2b6cb0; }
+    .badge-arrived { background: #c6f6d5; color: #22543d; }
+    .badge-done { background: #e2e8f0; color: #4a5568; }
+    .badge-cancel { background: #fed7d7; color: #c53030; text-decoration: line-through; }
+    /* 日期视图样式 */
+    .dv-group { margin-bottom: 16px; }
+    .dv-date-header {
+      font-size: 15px; font-weight: 700; color: #1a202c;
+      padding: 8px 0 4px; border-bottom: 2px solid #c53030;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dv-date-header .dv-weekday {
+      font-size: 12px; font-weight: 500; color: #718096;
+    }
+    .dv-half { margin: 6px 0; }
+    .dv-half-title {
+      font-size: 13px; font-weight: 600; color: #2d3748;
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 8px; border-radius: 6px; margin-bottom: 4px;
+    }
+    .dv-half-title.am { background: #ebf8ff; }
+    .dv-half-title.pm { background: #f0fff4; }
+    .dv-half-title .dv-loc { font-weight: 500; font-size: 11px; color: #4a5568; }
+    .dv-half-title .dv-count { margin-left: auto; font-size: 11px; color: #718096; }
+    .dv-patient {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; border-bottom: 1px solid #f0f0f0; font-size: 12px;
+    }
+    .dv-patient:last-child { border-bottom: none; }
+    .dv-patient .dv-idx {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #c53030; color: white; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; flex-shrink: 0;
+    }
+    .dv-patient .dv-info { flex: 1; min-width: 0; }
+    .dv-patient .dv-name { font-weight: 600; color: #2d3748; font-size: 13px; }
+    .dv-patient .dv-meta { color: #718096; font-size: 11px; margin-top: 1px; }
+    .dv-patient .dv-actions { display: flex; gap: 3px; flex-shrink: 0; }
+    .dv-patient .dv-actions button {
+      border: none; padding: 2px 7px; border-radius: 4px;
+      cursor: pointer; font-size: 10px;
+    }
+    .dv-addr {
+      font-size: 10px; color: #e53e3e; margin-left: 4px;
+    }
+    .dv-collapsed .dv-half { display: none; }
+    .dv-toggle {
+      cursor: pointer; font-size: 12px; color: #718096;
+      margin-left: 8px; user-select: none;
+    }
+    .dv-toggle:hover { color: #c53030; }
     textarea { resize: vertical; min-height: 50px; }
     .empty-state { text-align: center; color: #a0aec0; padding: 20px; font-size: 12px; }
 
@@ -536,6 +589,7 @@
         <div class="card" style="margin-top: 14px;">
           <div class="tabs">
             <button class="tab active" onclick="switchTab('list', this)">预约列表</button>
+            <button class="tab" onclick="switchTab('dateview', this)">日期视图</button>
             <button class="tab" onclick="switchTab('stats', this)">统计</button>
             <button class="tab" onclick="switchTab('rules', this)">排班规则</button>
           </div>
@@ -564,6 +618,26 @@
               <span style="font-size:12px;color:#718096;margin-left:auto;">按日期筛选方便通知患者</span>
             </div>
             <div class="appointment-list" id="appointmentList"></div>
+          </div>
+
+          <div id="tab-dateview" class="tab-content">
+            <div class="filter-bar">
+              <select id="dvFilterLocation" onchange="renderDateView()">
+                <option value="">全部院区</option>
+                <option value="south">南部</option>
+                <option value="east">东部</option>
+              </select>
+              <select id="dvFilterStatus" onchange="renderDateView()">
+                <option value="">全部状态</option>
+                <option value="booked">已预约</option>
+                <option value="arrived">已签到</option>
+                <option value="done">已完成</option>
+                <option value="cancel">已取消</option>
+              </select>
+              <input type="date" id="dvFilterDate" onchange="renderDateView()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+              <button class="btn-gray" style="padding:5px 10px;font-size:11px;" onclick="document.getElementById('dvFilterDate').value='';renderDateView();">清除</button>
+            </div>
+            <div id="dvContent" style="max-height:600px;overflow-y:auto;"></div>
           </div>
 
           <div id="tab-stats" class="tab-content">
@@ -607,11 +681,13 @@
               <div class="time-label">上午</div>
               <div class="time-loc" id="amLocDisplay">--</div>
               <div class="time-count" id="amCount">0/0</div>
+              <div class="time-addr" id="amAddrAdmin"></div>
             </div>
             <div class="time-option" data-slot="pm" onclick="selectSlot('pm')">
               <div class="time-label">下午</div>
               <div class="time-loc" id="pmLocDisplay">--</div>
               <div class="time-count" id="pmCount">0/0</div>
+              <div class="time-addr" id="pmAddrAdmin"></div>
             </div>
           </div>
           <div id="bookingForm" style="display:none;">
@@ -855,6 +931,10 @@
     function getDateKey(d) { return formatDate(d); }
     function isHoliday(dateStr) { return holidays.includes(dateStr); }
     function getLocationName(loc) { return loc === 'south' ? '南部' : loc === 'east' ? '东部' : '停诊'; }
+    const LOCATION_ADDRESSES = {
+      south: '黄浦区瞿溪路500号 新门诊楼7楼 口腔正畸科',
+      east: '浦东新区祝桥镇云亭路99号 口腔楼4楼'
+    };
 
     // ===== 17:00截止逻辑 =====
     function isSlotBookable(date, slot) {
@@ -1006,6 +1086,8 @@
       document.getElementById('pmLocDisplay').textContent = ds.pm.enabled ? getLocationName(ds.pm.location) : '停诊';
       document.getElementById('amCount').textContent = ds.am.enabled ? `${amCount}/${ds.am.maxSlot}` : '停诊';
       document.getElementById('pmCount').textContent = ds.pm.enabled ? `${pmCount}/${ds.pm.maxSlot}` : '停诊';
+      document.getElementById('amAddrAdmin').textContent = ds.am.enabled ? `📍 ${LOCATION_ADDRESSES[ds.am.location]}` : '';
+      document.getElementById('pmAddrAdmin').textContent = ds.pm.enabled ? `📍 ${LOCATION_ADDRESSES[ds.pm.location]}` : '';
 
       const amOpt = document.querySelector('[data-slot="am"]');
       const pmOpt = document.querySelector('[data-slot="pm"]');
@@ -1146,9 +1228,9 @@
         <p><strong>年龄：</strong>${appt.age || '—'}岁</p>
         <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
         <p><strong>地点：</strong>${getLocationName(appt.location)}</p>
+        <p style="font-size:12px;color:#e53e3e;margin-top:2px;">📍 ${LOCATION_ADDRESSES[appt.location] || ''}</p>
         <p><strong>预约ID：</strong>${appt.id}</p>
         ${appt.note ? `<p><strong>备注：</strong>${appt.note}</p>` : ''}
-        <p style="color:#718096;font-size:11px;margin-top:6px;">请截图保存此页面，就诊时出示</p>
       `;
 
       // 双重保障显示弹窗
@@ -1195,7 +1277,7 @@
               ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
               <span class="appt-status ${s.cls}">${s.text}</span>
             </div>
-            <div class="appt-meta">${dateStr} ${slotStr} · ${getLocationName(a.location)}${a.note ? ' · ' + a.note : ''}</div>
+            <div class="appt-meta">${dateStr} ${slotStr} · ${getLocationName(a.location)} ${a.location ? '<span style="color:#e53e3e">📍 ' + (LOCATION_ADDRESSES[a.location] || '') + '</span>' : ''}${a.note ? ' · ' + a.note : ''}</div>
           </div>
           <div class="appt-actions">
             ${a.status === 'booked' ? `<button class="btn-mini-green" data-action="arrive">签到</button>` : ''}
@@ -1205,6 +1287,173 @@
           </div>
         </div>`;
       }).join('');
+    }
+
+    // ===== 日期视图 =====
+    function renderDateView() {
+      const container = document.getElementById('dvContent');
+      if (!container) return;
+
+      const filterLocation = document.getElementById('dvFilterLocation').value;
+      const filterStatus = document.getElementById('dvFilterStatus').value;
+      const filterDate = document.getElementById('dvFilterDate').value;
+
+      let filtered = appointments.filter(a => {
+        if (filterLocation && a.location !== filterLocation) return false;
+        if (filterStatus && a.status !== filterStatus) return false;
+        if (filterDate && a.date !== filterDate) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state">暂无匹配预约</div>';
+        return;
+      }
+
+      // 按日期分组
+      const groups = {};
+      filtered.forEach(a => {
+        if (!groups[a.date]) groups[a.date] = [];
+        groups[a.date].push(a);
+      });
+
+      const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+      let html = '';
+      const dowNames = ['周日','周一','周二','周三','周四','周五','周六'];
+      const statusMap = { booked:'已预约', arrived:'已签到', done:'已完成', cancel:'已取消' };
+      const statusBadge = { booked:'badge-booked', arrived:'badge-arrived', done:'badge-done', cancel:'badge-cancel' };
+
+      sortedDates.forEach((dateStr, di) => {
+        const date = new Date(dateStr);
+        const dow = dowNames[date.getDay()];
+        const dayAppts = groups[dateStr];
+        const amAppts = dayAppts.filter(a => a.slot === 'am').sort((a, b) => a.name.localeCompare(b.name));
+        const pmAppts = dayAppts.filter(a => a.slot === 'pm').sort((a, b) => a.name.localeCompare(b.name));
+        const total = dayAppts.length;
+        const amTotal = amAppts.length;
+        const pmTotal = pmAppts.length;
+
+        // 获取该日的排班信息用于显示容量
+        const ds = getDaySchedule(date);
+        const amMax = ds.am.enabled ? ds.am.maxSlot : 0;
+        const pmMax = ds.pm.enabled ? ds.pm.maxSlot : 0;
+        const amLoc = ds.am.enabled ? ds.am.location : null;
+        const pmLoc = ds.pm.enabled ? ds.pm.location : null;
+
+        html += `<div class="dv-group" data-dv-date="${dateStr}">
+          <div class="dv-date-header">
+            <span>${dateStr}</span>
+            <span class="dv-weekday">${dow}</span>
+            <span style="font-size:12px;color:#718096;font-weight:400;">共${total}人</span>
+            <span class="dv-toggle" onclick="toggleDateViewGroup('${dateStr}')">▼</span>
+          </div>`;
+
+        // 上午
+        if (amAppts.length > 0 || (ds.am.enabled)) {
+          html += `<div class="dv-half">
+            <div class="dv-half-title am">
+              ☀️ 上午 ${amLoc ? getLocationName(amLoc) + '院区' : ''}
+              <span class="dv-addr">${amLoc ? '📍 ' + (LOCATION_ADDRESSES[amLoc] || '') : ''}</span>
+              <span class="dv-count">${amTotal}${amMax > 0 ? '/' + amMax : ''}</span>
+            </div>`;
+          if (amAppts.length > 0) {
+            amAppts.forEach((a, idx) => {
+              const s = statusMap[a.status] || a.status;
+              const sb = statusBadge[a.status] || '';
+              const safeId = encodeURIComponent(a.id);
+              html += `<div class="dv-patient" data-aid="${safeId}">
+                <div class="dv-idx">${idx + 1}</div>
+                <div class="dv-info">
+                  <div class="dv-name">${a.name}
+                    <span style="font-weight:normal;color:#718096;font-size:11px;">(${a.card})</span>
+                    ${a.age ? '<span style="color:#718096;font-size:11px;"> · ' + a.age + '岁</span>' : ''}
+                    ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
+                    <span class="appt-status ${sb}">${s}</span>
+                  </div>
+                  <div class="dv-meta">${a.note || '—'}</div>
+                </div>
+                <div class="dv-actions">
+                  ${a.status === 'booked' ? `<button onclick="doDVSetStatus('${safeId}','arrived')" style="background:#c6f6d5;color:#22543d;">签到</button>` : ''}
+                  ${a.status === 'arrived' ? `<button onclick="doDVSetStatus('${safeId}','done')" style="background:#bee3f8;color:#2b6cb0;">完成</button>` : ''}
+                  ${a.status !== 'cancel' && a.status !== 'done' ? `<button onclick="doDVCancel('${safeId}')" style="background:#fed7d7;color:#c53030;">取消</button>` : ''}
+                  <button onclick="doShowQR('${a.id}')" style="background:#e2e8f0;color:#4a5568;">二维码</button>
+                </div>
+              </div>`;
+            });
+          } else {
+            html += `<div style="padding:6px 8px;color:#a0aec0;font-size:11px;">暂无预约</div>`;
+          }
+          html += `</div>`;
+        }
+
+        // 下午
+        if (pmAppts.length > 0 || (ds.pm.enabled)) {
+          html += `<div class="dv-half">
+            <div class="dv-half-title pm">
+              🌤 下午 ${pmLoc ? getLocationName(pmLoc) + '院区' : ''}
+              <span class="dv-addr">${pmLoc ? '📍 ' + (LOCATION_ADDRESSES[pmLoc] || '') : ''}</span>
+              <span class="dv-count">${pmTotal}${pmMax > 0 ? '/' + pmMax : ''}</span>
+            </div>`;
+          if (pmAppts.length > 0) {
+            pmAppts.forEach((a, idx) => {
+              const s = statusMap[a.status] || a.status;
+              const sb = statusBadge[a.status] || '';
+              const safeId = encodeURIComponent(a.id);
+              html += `<div class="dv-patient" data-aid="${safeId}">
+                <div class="dv-idx">${idx + 1}</div>
+                <div class="dv-info">
+                  <div class="dv-name">${a.name}
+                    <span style="font-weight:normal;color:#718096;font-size:11px;">(${a.card})</span>
+                    ${a.age ? '<span style="color:#718096;font-size:11px;"> · ' + a.age + '岁</span>' : ''}
+                    ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
+                    <span class="appt-status ${sb}">${s}</span>
+                  </div>
+                  <div class="dv-meta">${a.note || '—'}</div>
+                </div>
+                <div class="dv-actions">
+                  ${a.status === 'booked' ? `<button onclick="doDVSetStatus('${safeId}','arrived')" style="background:#c6f6d5;color:#22543d;">签到</button>` : ''}
+                  ${a.status === 'arrived' ? `<button onclick="doDVSetStatus('${safeId}','done')" style="background:#bee3f8;color:#2b6cb0;">完成</button>` : ''}
+                  ${a.status !== 'cancel' && a.status !== 'done' ? `<button onclick="doDVCancel('${safeId}')" style="background:#fed7d7;color:#c53030;">取消</button>` : ''}
+                  <button onclick="doShowQR('${a.id}')" style="background:#e2e8f0;color:#4a5568;">二维码</button>
+                </div>
+              </div>`;
+            });
+          } else {
+            html += `<div style="padding:6px 8px;color:#a0aec0;font-size:11px;">暂无预约</div>`;
+          }
+          html += `</div>`;
+        }
+
+        html += `</div>`;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function toggleDateViewGroup(dateStr) {
+      const group = document.querySelector(`.dv-group[data-dv-date="${dateStr}"]`);
+      if (group) {
+        group.classList.toggle('dv-collapsed');
+        const toggle = group.querySelector('.dv-toggle');
+        if (group.classList.contains('dv-collapsed')) {
+          toggle.textContent = '▶';
+        } else {
+          toggle.textContent = '▼';
+        }
+      }
+    }
+
+    function doDVSetStatus(safeId, status) {
+      const aid = decodeURIComponent(safeId);
+      doSetStatus(aid, status);
+      renderDateView();
+    }
+
+    function doDVCancel(safeId) {
+      const aid = decodeURIComponent(safeId);
+      doCancel(aid);
+      renderDateView();
     }
 
     // 事件委托：预约列表按钮点击
@@ -1233,6 +1482,7 @@
         sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status } }).catch(e => console.error('Sync status to Supabase failed', e));
         saveData();
         renderAppointmentList();
+        renderDateView();
         renderCalendar();
         updateStats();
       } catch (err) {
@@ -1255,6 +1505,7 @@
         sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status: 'cancel' } }).catch(e => console.error('Sync cancel to Supabase failed', e));
         saveData();
         renderAppointmentList();
+        renderDateView();
         renderCalendar();
         updateStats();
         alert('已取消预约：' + a.name + ' ' + (a.slot==='am'?'上午':'下午'));
@@ -1832,6 +2083,7 @@
       await loadData();
       renderCalendar();
       renderAppointmentList();
+      renderDateView();
       updateStats();
       renderRuleList();
     })();
