@@ -176,6 +176,12 @@
       margin-top: 2px;
     }
     .time-option.selected .time-label { color: #c53030; }
+    .time-addr {
+      font-size: 11px;
+      color: #e53e3e;
+      margin-top: 3px;
+      line-height: 1.3;
+    }
 
     /* Deadline warning */
     .deadline-warning {
@@ -395,14 +401,6 @@
       cursor: pointer;
     }
 
-    /* Note */
-    .note-text {
-      font-size: 12px;
-      color: #a0aec0;
-      text-align: center;
-      padding: 8px 0;
-    }
-
     .hidden { display: none !important; }
   </style>
 </head>
@@ -441,10 +439,12 @@
         <div class="time-option" data-slot="am" onclick="selectSlot('am')">
           <div class="time-label">上午</div>
           <div class="time-loc" id="amLoc">--</div>
+          <div class="time-addr" id="amAddr"></div>
         </div>
         <div class="time-option" data-slot="pm" onclick="selectSlot('pm')">
           <div class="time-label">下午</div>
           <div class="time-loc" id="pmLoc">--</div>
+          <div class="time-addr" id="pmAddr"></div>
         </div>
       </div>
 
@@ -490,11 +490,6 @@
       </div>
       <button class="btn-secondary" onclick="queryAppointments()">查询</button>
       <div class="query-result" id="queryResult"></div>
-    </div>
-
-    <div class="note-text">
-      预约后请截图保存凭证<br>
-      就诊时请出示预约信息
     </div>
   </div>
 
@@ -579,6 +574,10 @@
     }
     function getDateKey(d) { return formatDate(d); }
     function getLocName(loc) { return loc==='south'?'南部':loc==='east'?'东部':'停诊'; }
+    const LOCATION_ADDRESSES = {
+      south:'黄浦区瞿溪路500号 新门诊楼7楼 口腔正畸科',
+      east:'浦东新区祝桥镇云亭路99号 口腔楼4楼'
+    };
 
     // ===== 加载数据（Supabase 优先，localStorage 兜底） =====
     async function loadData() {
@@ -717,9 +716,19 @@
       }
       document.getElementById('recentSection').style.display = 'block';
       container.innerHTML = list.map(p =>
-        `<div class="recent-chip" onclick="fillPatient('${p.name}','${p.card}')">${p.name}</div>`
+        `<div class="recent-chip" data-name="${p.name.replace(/"/g,'&quot;')}" data-card="${p.card.replace(/"/g,'&quot;')}">${p.name}</div>`
       ).join('');
     }
+
+    // 事件委托：近期患者点击
+    document.getElementById('recentSection').addEventListener('click', function(e) {
+      const chip = e.target.closest('.recent-chip');
+      if (!chip) return;
+      const name = chip.dataset.name;
+      const card = chip.dataset.card;
+      if (!name || !card) return;
+      fillPatient(name, card);
+    });
 
     function fillPatient(name, card) {
       document.getElementById('patientName').value = name;
@@ -896,6 +905,8 @@
 
       document.getElementById('amLoc').textContent = ds.am.enabled ? `${getLocName(ds.am.location)} · 剩余${amRemaining}/${ds.am.maxSlot}${amFull ? '（已满）' : ''}` : '停诊';
       document.getElementById('pmLoc').textContent = ds.pm.enabled ? `${getLocName(ds.pm.location)} · 剩余${pmRemaining}/${ds.pm.maxSlot}${pmFull ? '（已满）' : ''}` : '停诊';
+      document.getElementById('amAddr').textContent = ds.am.enabled ? `📍 ${LOCATION_ADDRESSES[ds.am.location]}` : '';
+      document.getElementById('pmAddr').textContent = ds.pm.enabled ? `📍 ${LOCATION_ADDRESSES[ds.pm.location]}` : '';
 
       if (!ds.am.enabled || !amBookable || amFull) amOpt.classList.add('closed');
       if (!ds.pm.enabled || !pmBookable || pmFull) pmOpt.classList.add('closed');
@@ -1010,12 +1021,13 @@
         <p><strong>年龄：</strong>${appt.age||'—'}岁</p>
         <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
         <p><strong>地点：</strong>${getLocName(appt.location)}院区</p>
+        <p style="font-size:12px;color:#e53e3e;margin-top:2px;">📍 ${LOCATION_ADDRESSES[appt.location]}</p>
         ${appt.note?`<p><strong>备注：</strong>${appt.note}</p>`:''}
         <p class="voucher-id">凭证号：${appt.id}</p>
       `;
 
       document.getElementById('successModal').classList.add('active');
-      alert('预约成功！\n\n'+appt.name+'\n'+dateStr+' '+slotStr+'\n'+getLocName(appt.location)+'院区\n\n请截图保存此页面');
+      alert('预约成功！\n\n'+appt.name+'\n'+dateStr+' '+slotStr+'\n'+getLocName(appt.location)+'院区\n📍 '+LOCATION_ADDRESSES[appt.location]);
     }
 
     function closeSuccessModal() {
@@ -1066,6 +1078,9 @@
             </div>
             <div class="query-item-info">
               ${getLocName(a.location)}院区 · ${a.name} · 凭证号 ${a.id.substr(-6)}
+            </div>
+            <div style="font-size:11px;color:#e53e3e;margin-top:2px;">
+              📍 ${LOCATION_ADDRESSES[a.location]}
             </div>
             ${canCancel ? `
               <div class="query-item-actions">
