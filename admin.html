@@ -1753,13 +1753,83 @@
       saveData();
       closeModal('ruleModal');
       renderRuleList();
+      // 同步此规则到已存在的逐日覆盖中
+      syncRuleToOverrides(ruleData);
     }
 
     function deleteRule(id) {
       if (!confirm('确定删除此规则？')) return;
+      // 清除此规则生成的逐日覆盖
+      const oldRule = rules.find(r => r.id === id);
       rules = rules.filter(r => r.id !== id);
       saveData();
       renderRuleList();
+      if (oldRule) clearRuleOverrides(oldRule);
+    }
+
+    // 将规则的容量更新到已有的逐日覆盖中
+    function syncRuleToOverrides(rule) {
+      const changedDates = [];
+      const start = new Date(rule.startDate);
+      start.setHours(0, 0, 0, 0);
+
+      for (const dateKey of Object.keys(schedule)) {
+        const d = new Date(dateKey);
+        d.setHours(0, 0, 0, 0);
+        if (d < start) continue;
+        if (!rule.daysOfWeek.includes(d.getDay())) continue;
+        const diffDays = Math.floor((d - start) / (24 * 60 * 60 * 1000));
+        const diffWeeks = Math.floor(diffDays / 7);
+        if (diffWeeks % rule.intervalWeeks !== 0) continue;
+        // 此日期匹配此规则的周期
+        const ds = schedule[dateKey];
+        if (!ds || !ds.am || !ds.pm) continue;
+        // 只更新同院区的日期（逐日覆盖的院区跟规则一致时才同步）
+        if (ds.am.location !== rule.location && ds.pm.location !== rule.location) continue;
+        if (ds.am.enabled) {
+          ds.am.maxSlot = rule.amMax;
+          ds.am.location = rule.location;
+        }
+        if (ds.pm.enabled) {
+          ds.pm.maxSlot = rule.pmMax;
+          ds.pm.location = rule.location;
+        }
+        changedDates.push(dateKey);
+      }
+
+      if (changedDates.length > 0) {
+        syncScheduleOverrides(changedDates);
+      }
+      renderCalendar();
+    }
+
+    // 清除被删除规则对应的逐日覆盖
+    function clearRuleOverrides(rule) {
+      const start = new Date(rule.startDate);
+      start.setHours(0, 0, 0, 0);
+      const changedDates = [];
+
+      for (const dateKey of Object.keys(schedule)) {
+        const d = new Date(dateKey);
+        d.setHours(0, 0, 0, 0);
+        if (d < start) continue;
+        if (!rule.daysOfWeek.includes(d.getDay())) continue;
+        const diffDays = Math.floor((d - start) / (24 * 60 * 60 * 1000));
+        const diffWeeks = Math.floor(diffDays / 7);
+        if (diffWeeks % rule.intervalWeeks !== 0) continue;
+        // 匹配此规则的覆盖 → 删除，让 getDaySchedule 回退到剩余规则
+        delete schedule[dateKey];
+        changedDates.push(dateKey);
+      }
+
+      if (changedDates.length > 0) {
+        // 删除云端 overrides
+        changedDates.forEach(dateKey => {
+          sbFetch('schedule_overrides', { method: 'DELETE', query: `?date=eq.${dateKey}` })
+            .catch(e => console.error('清除覆盖失败', dateKey, e));
+        });
+      }
+      renderCalendar();
     }
 
     // ===== 恢复默认排班规则（清空云端旧规则 + 逐日覆盖，写入新默认规则）=====
