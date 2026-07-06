@@ -339,6 +339,20 @@
       border-color: #feb2b2;
     }
 
+    /* Toast */
+    .toast {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 9999; max-width: 360px; width: 90%;
+      background: #276749; color: white;
+      padding: 12px 20px; border-radius: 10px;
+      font-size: 14px; font-weight: 500;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      opacity: 0; transition: opacity 0.3s ease;
+      pointer-events: none; text-align: center;
+    }
+    .toast.show { opacity: 1; pointer-events: auto; }
+    .toast.error { background: #c53030; }
+
     /* Success modal */
     .modal-overlay {
       position: fixed;
@@ -482,11 +496,11 @@
       </div>
     </div>
 
-    <!-- 查询预约 -->
+    <!-- 患者查询与取消预约 -->
     <div class="card">
-      <div class="card-title">查询我的预约</div>
+      <div class="card-title">患者查询与取消预约</div>
       <div class="form-group">
-        <input type="text" id="queryCard" placeholder="输入就诊卡号查询" inputmode="numeric">
+        <input type="text" id="queryCard" placeholder="输入就诊卡号查询或取消" inputmode="numeric">
       </div>
       <button class="btn-secondary" onclick="queryAppointments()">查询</button>
       <div class="query-result" id="queryResult"></div>
@@ -501,6 +515,9 @@
       <button class="modal-close" onclick="closeSuccessModal()">我知道了</button>
     </div>
   </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
 
   <script>
     // ===== Supabase 配置 =====
@@ -1027,7 +1044,15 @@
       `;
 
       document.getElementById('successModal').classList.add('active');
-      alert('预约成功！\n\n'+appt.name+'\n'+dateStr+' '+slotStr+'\n'+getLocName(appt.location)+'院区\n📍 '+LOCATION_ADDRESSES[appt.location]);
+      showToast('预约成功！' + appt.name + ' ' + dateStr + ' ' + slotStr);
+    }
+
+    function showToast(msg, type) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast' + (type === 'error' ? ' error' : '');
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2000);
     }
 
     function closeSuccessModal() {
@@ -1096,7 +1121,7 @@
       const idx = appointments.findIndex(a => a.id === id);
       if (idx === -1) return;
       const a = appointments[idx];
-      if (a.status !== 'booked') { alert('该预约已无法取消'); return; }
+      if (a.status !== 'booked') { showToast('该预约已无法取消', 'error'); return; }
 
       if (!confirm(`确定取消 ${a.name} ${a.slot==='am'?'上午':'下午'} 的预约吗？`)) return;
 
@@ -1105,7 +1130,7 @@
       await cancelAppointmentInDB(id); // RPC 更新 Supabase
       queryAppointments();
       renderCalendar();
-      alert('已取消预约');
+      showToast('已取消预约');
     }
 
     // ===== 初始化 =====
