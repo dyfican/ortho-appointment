@@ -500,7 +500,7 @@
     <div class="card">
       <div class="card-title">患者查询与取消预约</div>
       <div class="form-group">
-        <input type="text" id="queryCard" placeholder="输入就诊卡号查询或取消" inputmode="numeric">
+        <input type="text" id="queryCard" placeholder="输入就诊卡号查询或取消">
       </div>
       <button class="btn-secondary" onclick="queryAppointments()">查询</button>
       <div class="query-result" id="queryResult"></div>
@@ -687,10 +687,11 @@
 
     async function cancelAppointmentInDB(id) {
       try {
-        await sbRpc('cancel_appointment_by_id', { p_id: id });
+        const result = await sbRpc('cancel_appointment_by_id', { p_id: id });
+        return result !== false; // RPC 返回 boolean
       } catch(e) {
         console.error('Cancel in Supabase failed', e);
-        localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
+        return false;
       }
     }
 
@@ -803,6 +804,15 @@
 
     function isValidCard(card) {
       return /^(131|H00)/i.test(card) && card.length === 15;
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function isSlotBookable(date, slot) {
@@ -954,9 +964,9 @@
       if (!selectedDate) return;
       const ds = getDaySchedule(selectedDate);
       const cfg = ds[slot];
-      if (!cfg.enabled) { alert('该时段已停诊'); return; }
-      if (!isSlotBookable(selectedDate, slot)) { alert('今日17:00后不可预约明天上午'); return; }
-      if (getSlotCount(selectedDate, slot) >= cfg.maxSlot) { alert('该时段已满额'); return; }
+      if (!cfg.enabled) { showToast('该时段已停诊', 'error'); return; }
+      if (!isSlotBookable(selectedDate, slot)) { showToast('今日17:00后不可预约明天上午', 'error'); return; }
+      if (getSlotCount(selectedDate, slot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
 
       selectedSlot = slot;
       document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
@@ -973,36 +983,36 @@
         const isReturn = document.getElementById('isReturnVisit').checked;
         const age = parseInt(document.getElementById('patientAge').value);
 
-        if (!name) { alert('请输入患者姓名'); return; }
-        if (!card) { alert('请输入就诊卡号'); return; }
-        if (!isValidCard(card)) { alert('自费卡号格式有误（131或H00开头，共15位）'); return; }
-        if (!age || age < 1 || age > 120) { alert('请填写有效的年龄'); return; }
-        if (!selectedDate || !selectedSlot) { alert('请先选择日期和时段'); return; }
+        if (!name) { showToast('请输入患者姓名', 'error'); return; }
+        if (!card) { showToast('请输入就诊卡号', 'error'); return; }
+        if (!isValidCard(card)) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
+        if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
+        if (!selectedDate || !selectedSlot) { showToast('请先选择日期和时段', 'error'); return; }
 
         // 日期范围校验（今天起 2 个月内）
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const twoMonthsLater = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
-        if (selectedDate < today) { alert('不能预约过去的日期'); return; }
-        if (selectedDate > twoMonthsLater) { alert('只能预约2个月内的日期'); return; }
+        if (selectedDate < today) { showToast('不能预约过去的日期', 'error'); return; }
+        if (selectedDate > twoMonthsLater) { showToast('只能预约2个月内的日期', 'error'); return; }
 
         const ds = getDaySchedule(selectedDate);
         const cfg = ds[selectedSlot];
-        if (!cfg.enabled) { alert('该时段已停诊'); return; }
-        if (!isSlotBookable(selectedDate, selectedSlot)) { alert('已超过今日17:00，不可预约明天上午'); return; }
-        if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { alert('该时段已满额'); return; }
+        if (!cfg.enabled) { showToast('该时段已停诊', 'error'); return; }
+        if (!isSlotBookable(selectedDate, selectedSlot)) { showToast('已超过今日17:00，不可预约明天上午', 'error'); return; }
+        if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
 
         // 防重复预约：调 RPC 检查（RLS 已禁止前端直接读 appointments）
         const dateStr = formatDate(selectedDate);
         const isDup = await sbRpc('check_duplicate_booking', { p_card: card, p_date: dateStr, p_slot: selectedSlot });
-        if (isDup) { alert('您已预约了该日期及时段，请勿重复预约'); return; }
+        if (isDup) { showToast('您已预约了该日期及时段，请勿重复预约', 'error'); return; }
 
         // 周六预约频次限制（按年龄比例，仅南部院区）
         if (selectedDate.getDay() === 6 && cfg.location === 'south') {
           const r = await canBookSaturday(card, age);
           if (!r.allowed) {
             const ruleTxt = r.N === 2 ? '每2次预约最多1次周六' : '每3次预约最多1次周六';
-            alert(`该年龄段${ruleTxt}（南部院区）。\n\n您已预约 ${r.T} 次（其中周六 ${r.S} 次），暂不可再预约南部周六，请选择其他时段或其他院区。`);
+            showToast(`该年龄段${ruleTxt}（南部院区），您已预约 ${r.T} 次（其中周六 ${r.S} 次），暂不可再预约南部周六`, 'error');
             return;
           }
         }
@@ -1032,7 +1042,7 @@
         selectedSlot = null;
       } catch (err) {
         console.error(err);
-        alert('预约出错：' + err.message);
+        showToast('预约出错：' + err.message, 'error');
       }
     }
 
@@ -1042,14 +1052,14 @@
       const slotStr = appt.slot === 'am' ? '上午' : '下午';
 
       document.getElementById('voucherContent').innerHTML = `
-        <p><strong>患者：</strong>${appt.name} ${appt.isReturn?'(复诊)':'(初诊)'}</p>
-        <p><strong>卡号：</strong>${appt.card}</p>
-        <p><strong>年龄：</strong>${appt.age||'—'}岁</p>
+        <p><strong>患者：</strong>${escapeHtml(appt.name)} ${appt.isReturn?'(复诊)':'(初诊)'}</p>
+        <p><strong>卡号：</strong>${escapeHtml(appt.card)}</p>
+        <p><strong>年龄：</strong>${escapeHtml(appt.age)||'—'}岁</p>
         <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
         <p><strong>地点：</strong>${getLocName(appt.location)}院区</p>
         <p style="font-size:12px;color:#e53e3e;margin-top:2px;">📍 ${LOCATION_ADDRESSES[appt.location]}</p>
-        ${appt.note?`<p><strong>备注：</strong>${appt.note}</p>`:''}
-        <p class="voucher-id">凭证号：${appt.id}</p>
+        ${appt.note?`<p><strong>备注：</strong>${escapeHtml(appt.note)}</p>`:''}
+        <p class="voucher-id">凭证号：${escapeHtml(appt.id)}</p>
       `;
 
       document.getElementById('successModal').classList.add('active');
@@ -1111,7 +1121,7 @@
               <span class="query-item-status ${statusClass}">${statusLabel}</span>
             </div>
             <div class="query-item-info">
-              ${getLocName(a.location)}院区 · ${a.name} · 凭证号 ${a.id.substr(-6)}
+              ${getLocName(a.location)}院区 · ${escapeHtml(a.name)} · 凭证号 ${escapeHtml(String(a.id).substr(-6))}
             </div>
             <div style="font-size:11px;color:#e53e3e;margin-top:2px;">
               📍 ${LOCATION_ADDRESSES[a.location]}
@@ -1134,9 +1144,15 @@
 
       if (!confirm(`确定取消 ${a.name} ${a.slot==='am'?'上午':'下午'} 的预约吗？`)) return;
 
+      // 先调 RPC 更新 Supabase，成功后再改本地状态
+      const ok = await cancelAppointmentInDB(id);
+      if (!ok) {
+        showToast('取消失败，请重试', 'error');
+        return;
+      }
+
       appointments[idx].status = 'cancel';
       slotCountMap[`${a.date}_${a.slot}`] = Math.max(0, (slotCountMap[`${a.date}_${a.slot}`] || 0) - 1);
-      await cancelAppointmentInDB(id); // RPC 更新 Supabase
       queryAppointments();
       renderCalendar();
       showToast('已取消预约');
