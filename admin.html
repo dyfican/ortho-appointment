@@ -699,6 +699,10 @@
               <label>就诊卡号</label>
               <input type="text" id="patientCard" placeholder="请输入卡号（自费卡）">
             </div>
+            <div class="form-group">
+              <label>年龄</label>
+              <input type="number" id="patientAge" min="1" max="120" placeholder="可选" style="width:80px;">
+            </div>
             <div class="checkbox-row">
               <input type="checkbox" id="isReturnVisit" onchange="updateReturnBadge()">
               <label for="isReturnVisit">复诊患者</label>
@@ -934,6 +938,24 @@
     function normalizeCard(card) {
       return (card || '').trim();
     }
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str == null ? '' : String(str);
+      return d.innerHTML;
+    }
+
+    // Toast 提示（替代 alert）
+    function showToast(message, type) {
+      const existing = document.getElementById('adminToast');
+      if (existing) existing.remove();
+      const t = document.createElement('div');
+      t.id = 'adminToast';
+      t.textContent = message;
+      t.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:99999;padding:12px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,0.15);max-width:90vw;text-align:center;'
+        + (type === 'error' ? 'background:#e53e3e;color:#fff;' : 'background:#38a169;color:#fff;');
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2200);
+    }
     const LOCATION_ADDRESSES = {
       south: '黄浦区瞿溪路500号 新门诊楼7楼 口腔正畸科',
       east: '浦东新区祝桥镇云亭路99号 口腔楼4楼'
@@ -1121,16 +1143,16 @@
       const ds = getDaySchedule(selectedDate);
       const cfg = ds[slot];
       if (!cfg.enabled) {
-        alert('该时段已停诊');
+        showToast('该时段已停诊', 'error');
         return;
       }
       if (!isSlotBookable(selectedDate, slot)) {
-        alert('今日17:00后不可预约明天上午，请选择其他日期');
+        showToast('今日17:00后不可预约明天上午，请选择其他日期', 'error');
         return;
       }
       const count = getSlotCount(selectedDate, slot);
       if (count >= cfg.maxSlot) {
-        alert('该时段已满额');
+        showToast('该时段已满额', 'error');
         return;
       }
 
@@ -1159,24 +1181,27 @@
         const card = normalizeCard(document.getElementById('patientCard').value);
         const note = document.getElementById('patientNote').value.trim();
         const isReturn = document.getElementById('isReturnVisit').checked;
-        if (!name || !card) { alert('请填写完整信息'); return; }
-        if (!/^(131|H00)/i.test(card) || card.length !== 15) { alert('自费卡号格式有误（131或H00开头，共15位）'); return; }
-        if (!selectedDate || !selectedSlot) { alert('请先选择日期和时段'); return; }
+        const ageInput = document.getElementById('patientAge').value;
+        const age = ageInput ? parseInt(ageInput) : null;
+        if (!name || !card) { showToast('请填写完整信息', 'error'); return; }
+        if (!/^(131|H00)/i.test(card) || card.length !== 15) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
+        if (age !== null && (age < 1 || age > 120)) { showToast('年龄请输入1-120之间的数字', 'error'); return; }
+        if (!selectedDate || !selectedSlot) { showToast('请先选择日期和时段', 'error'); return; }
 
         const ds = getDaySchedule(selectedDate);
         const cfg = ds[selectedSlot];
-        if (!cfg.enabled) { alert('该时段已停诊'); return; }
-        if (!isSlotBookable(selectedDate, selectedSlot)) { alert('已超过今日17:00，不可预约明天上午'); return; }
-        if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { alert('该时段已满额'); return; }
+        if (!cfg.enabled) { showToast('该时段已停诊', 'error'); return; }
+        if (!isSlotBookable(selectedDate, selectedSlot)) { showToast('已超过今日17:00，不可预约明天上午', 'error'); return; }
+        if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
 
         // 防重复预约：同一卡号同一天同一时段
         const dateStr = formatDate(selectedDate);
         const dup = appointments.find(a => a.card === card && a.date === dateStr && a.slot === selectedSlot && a.status !== 'cancel');
-        if (dup) { alert('该患者已预约了该日期及时段，请勿重复预约'); return; }
+        if (dup) { showToast('该患者已预约了该日期及时段，请勿重复预约', 'error'); return; }
 
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-          name, card, note, isReturn,
+          name, card, note, isReturn, age,
           date: formatDate(selectedDate),  // YYYY-MM-DD 格式
           slot: selectedSlot,
           location: cfg.location,
@@ -1194,13 +1219,14 @@
 
         document.getElementById('patientName').value = '';
         document.getElementById('patientCard').value = '';
+        document.getElementById('patientAge').value = '';
         document.getElementById('patientNote').value = '';
         document.getElementById('bookingForm').style.display = 'none';
         document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
         selectedSlot = null;
       } catch (err) {
         console.error('预约出错：', err);
-        alert('预约过程中出现错误：' + err.message + '\n\n如果二维码无法显示，请检查网络连接或刷新页面重试。');
+        showToast('预约过程中出现错误：' + err.message + '。如二维码无法显示，请检查网络连接或刷新页面重试。', 'error');
       }
     }
 
@@ -1227,18 +1253,17 @@
       }
 
       document.getElementById('modalInfo').innerHTML = `
-        <p><strong>患者：</strong>${appt.name} ${appt.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}</p>
-        <p><strong>卡号：</strong>${appt.card}</p>
+        <p><strong>患者：</strong>${escapeHtml(appt.name)} ${appt.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}</p>
+        <p><strong>卡号：</strong>${escapeHtml(appt.card)}</p>
         <p><strong>年龄：</strong>${appt.age || '—'}岁</p>
         <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
         <p><strong>地点：</strong>${getLocationName(appt.location)}</p>
         <p style="font-size:12px;color:#e53e3e;margin-top:2px;">📍 ${LOCATION_ADDRESSES[appt.location] || ''}</p>
-        <p><strong>预约ID：</strong>${appt.id}</p>
-        ${appt.note ? `<p><strong>备注：</strong>${appt.note}</p>` : ''}
+        <p><strong>预约ID：</strong>${escapeHtml(appt.id)}</p>
+        ${appt.note ? `<p><strong>备注：</strong>${escapeHtml(appt.note)}</p>` : ''}
       `;
 
-      // 双重保障显示弹窗
-      modal.style.display = 'flex';
+      // 显示弹窗
       modal.classList.add('active');
     }
 
@@ -1274,14 +1299,17 @@
         const sm = { booked: { cls:'status-booked', text:'已预约' }, arrived: { cls:'status-arrived', text:'已签到' }, done: { cls:'status-done', text:'已完成' }, cancel: { cls:'status-cancel', text:'已取消' } };
         const s = sm[a.status];
         const safeId = encodeURIComponent(a.id);
+        const eName = escapeHtml(a.name);
+        const eCard = escapeHtml(a.card);
+        const eNote = escapeHtml(a.note);
         return `<div class="appt-item" data-aid="${safeId}">
           <div class="appt-info">
-            <div class="appt-name">${a.name} <span style="font-weight:normal;color:#718096">(${a.card})</span>
+            <div class="appt-name">${eName} <span style="font-weight:normal;color:#718096">(${eCard})</span>
               ${a.age ? '<span class="badge" style="background:#E6F1FB;color:#0C447C;">'+a.age+'岁</span>' : ''}
               ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
               <span class="appt-status ${s.cls}">${s.text}</span>
             </div>
-            <div class="appt-meta">${dateStr} ${slotStr} · ${getLocationName(a.location)} ${a.location ? '<span style="color:#e53e3e">📍 ' + (LOCATION_ADDRESSES[a.location] || '') + '</span>' : ''}${a.note ? ' · ' + a.note : ''}</div>
+            <div class="appt-meta">${dateStr} ${slotStr} · ${getLocationName(a.location)} ${a.location ? '<span style="color:#e53e3e">📍 ' + (LOCATION_ADDRESSES[a.location] || '') + '</span>' : ''}${eNote ? ' · ' + eNote : ''}</div>
           </div>
           <div class="appt-actions">
             ${a.status === 'booked' ? `<button class="btn-mini-green" data-action="arrive">签到</button>` : ''}
@@ -1366,22 +1394,25 @@
               const s = statusMap[a.status] || a.status;
               const sb = statusBadge[a.status] || '';
               const safeId = encodeURIComponent(a.id);
+              const eName = escapeHtml(a.name);
+              const eCard = escapeHtml(a.card);
+              const eNote = escapeHtml(a.note);
               html += `<div class="dv-patient" data-aid="${safeId}">
                 <div class="dv-idx">${idx + 1}</div>
                 <div class="dv-info">
-                  <div class="dv-name">${a.name}
-                    <span style="font-weight:normal;color:#718096;font-size:11px;">(${a.card})</span>
+                  <div class="dv-name">${eName}
+                    <span style="font-weight:normal;color:#718096;font-size:11px;">(${eCard})</span>
                     ${a.age ? '<span style="color:#718096;font-size:11px;"> · ' + a.age + '岁</span>' : ''}
                     ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
                     <span class="appt-status ${sb}">${s}</span>
                   </div>
-                  <div class="dv-meta">${a.note || '—'}</div>
+                  <div class="dv-meta">${eNote || '—'}</div>
                 </div>
                 <div class="dv-actions">
                   ${a.status === 'booked' ? `<button onclick="doDVSetStatus('${safeId}','arrived')" style="background:#c6f6d5;color:#22543d;">签到</button>` : ''}
                   ${a.status === 'arrived' ? `<button onclick="doDVSetStatus('${safeId}','done')" style="background:#bee3f8;color:#2b6cb0;">完成</button>` : ''}
                   ${a.status !== 'cancel' && a.status !== 'done' ? `<button onclick="doDVCancel('${safeId}')" style="background:#fed7d7;color:#c53030;">取消</button>` : ''}
-                  <button onclick="doShowQR('${a.id}')" style="background:#e2e8f0;color:#4a5568;">二维码</button>
+                  <button onclick="doShowQR('${safeId}')" style="background:#e2e8f0;color:#4a5568;">二维码</button>
                 </div>
               </div>`;
             });
@@ -1404,22 +1435,25 @@
               const s = statusMap[a.status] || a.status;
               const sb = statusBadge[a.status] || '';
               const safeId = encodeURIComponent(a.id);
+              const eName = escapeHtml(a.name);
+              const eCard = escapeHtml(a.card);
+              const eNote = escapeHtml(a.note);
               html += `<div class="dv-patient" data-aid="${safeId}">
                 <div class="dv-idx">${idx + 1}</div>
                 <div class="dv-info">
-                  <div class="dv-name">${a.name}
-                    <span style="font-weight:normal;color:#718096;font-size:11px;">(${a.card})</span>
+                  <div class="dv-name">${eName}
+                    <span style="font-weight:normal;color:#718096;font-size:11px;">(${eCard})</span>
                     ${a.age ? '<span style="color:#718096;font-size:11px;"> · ' + a.age + '岁</span>' : ''}
                     ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
                     <span class="appt-status ${sb}">${s}</span>
                   </div>
-                  <div class="dv-meta">${a.note || '—'}</div>
+                  <div class="dv-meta">${eNote || '—'}</div>
                 </div>
                 <div class="dv-actions">
                   ${a.status === 'booked' ? `<button onclick="doDVSetStatus('${safeId}','arrived')" style="background:#c6f6d5;color:#22543d;">签到</button>` : ''}
                   ${a.status === 'arrived' ? `<button onclick="doDVSetStatus('${safeId}','done')" style="background:#bee3f8;color:#2b6cb0;">完成</button>` : ''}
                   ${a.status !== 'cancel' && a.status !== 'done' ? `<button onclick="doDVCancel('${safeId}')" style="background:#fed7d7;color:#c53030;">取消</button>` : ''}
-                  <button onclick="doShowQR('${a.id}')" style="background:#e2e8f0;color:#4a5568;">二维码</button>
+                  <button onclick="doShowQR('${safeId}')" style="background:#e2e8f0;color:#4a5568;">二维码</button>
                 </div>
               </div>`;
             });
@@ -1475,52 +1509,54 @@
       else if (action === 'qr') { doShowQR(aid); }
     });
 
-    function doSetStatus(id, status) {
+    async function doSetStatus(id, status) {
+      const a = appointments.find(x => x.id === id);
+      if (!a) { showToast('未找到预约记录', 'error'); return; }
+      // 先调云端，成功后再改本地
       try {
-        const a = appointments.find(x => x.id === id);
-        if (!a) { alert('未找到预约记录'); return; }
+        const r = await sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status } });
+        if (r === null) { showToast('云端同步失败，未变更', 'error'); return; }
         a.status = status;
         a[`${status}At`] = new Date().toISOString();
-        changedApptIds.add(id); // 标记为已变更
-        // 直接同步到 Supabase
-        sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status } }).catch(e => console.error('Sync status to Supabase failed', e));
-        saveData();
+        changedApptIds.delete(id); // 已同步到云端，无需再 saveData
         renderAppointmentList();
         renderDateView();
         renderCalendar();
         updateStats();
+        const label = status === 'arrived' ? '已到诊' : status === 'done' ? '已完成' : status;
+        showToast('已更新为：' + label);
       } catch (err) {
         console.error(err);
-        alert('操作失败：' + err.message);
+        showToast('同步失败：' + err.message, 'error');
       }
     }
 
-    function doCancel(id) {
+    async function doCancel(id) {
+      const a = appointments.find(x => x.id === id);
+      if (!a) { showToast('未找到预约记录', 'error'); return; }
+      if (a.status === 'cancel') { showToast('该预约已取消', 'error'); return; }
+      if (a.status === 'done') { showToast('该预约已完成，无法取消', 'error'); return; }
+      // 先调云端，成功后再改本地
       try {
-        const a = appointments.find(x => x.id === id);
-        if (!a) { alert('未找到预约记录'); return; }
-        if (a.status === 'cancel') { alert('该预约已取消'); return; }
-        if (a.status === 'done') { alert('该预约已完成，无法取消'); return; }
-
+        const r = await sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status: 'cancel' } });
+        if (r === null) { showToast('云端同步失败，未取消', 'error'); return; }
         a.status = 'cancel';
         a.cancelAt = new Date().toISOString();
-        changedApptIds.add(id); // 标记为已变更
-        // 直接同步到 Supabase
-        sbFetch('appointments', { method: 'PATCH', query: `?id=eq.${id}`, body: { status: 'cancel' } }).catch(e => console.error('Sync cancel to Supabase failed', e));
-        saveData();
+        changedApptIds.delete(id);
         renderAppointmentList();
         renderDateView();
         renderCalendar();
         updateStats();
-        alert('已取消预约：' + a.name + ' ' + (a.slot==='am'?'上午':'下午'));
+        showToast(`已取消：${a.name} ${a.slot==='am'?'上午':'下午'}`);
       } catch (err) {
         console.error(err);
-        alert('取消失败：' + err.message);
+        showToast('取消失败：' + err.message, 'error');
       }
     }
 
-    function doShowQR(id) {
-      const a = appointments.find(x => x.id === id);
+    function doShowQR(safeIdOrId) {
+      const aid = safeIdOrId.includes('%') ? decodeURIComponent(safeIdOrId) : safeIdOrId;
+      const a = appointments.find(x => x.id === aid);
       if (a) showSuccessModal(a);
     }
 
@@ -1560,7 +1596,7 @@
       syncScheduleOverrides(generatedDates); // 只同步批量生成的日期
       closeModal('batchModal');
       renderCalendar();
-      alert(`已生成从 ${startDateStr} 起 ${months} 个月的排班`);
+      showToast(`已生成从 ${startDateStr} 起 ${months} 个月的排班`);
     }
 
     // ===== 逐日设置 =====
@@ -1658,10 +1694,10 @@
       syncScheduleOverrides(dates).then(() => {
         closeModal('dayConfigModal');
         renderCalendar();
-        alert('逐日设置已保存到云端 ✓');
+        showToast('逐日设置已保存到云端 ✓');
       }).catch(e => {
         console.error('逐日保存失败', e);
-        alert('保存出现问题：' + e.message + '\n\n数据已保存在本地，请检查网络后重试。');
+        showToast('保存出现问题：' + e.message + '。数据已保存在本地，请检查网络后重试。', 'error');
       });
     }
 
@@ -1675,17 +1711,18 @@
       const dowNames = ['日','一','二','三','四','五','六'];
       container.innerHTML = rules.map((r, i) => {
         const days = r.daysOfWeek.map(d => `周${dowNames[d]}`).join('、');
+        const safeId = encodeURIComponent(r.id);
         return `<div class="rule-item">
-          <h4>${i + 1}. ${r.name}</h4>
+          <h4>${i + 1}. ${escapeHtml(r.name)}</h4>
           <div class="rule-detail">
-            <strong>周期：</strong>${days} · 从 ${r.startDate} 起每 ${r.intervalWeeks} 周<br>
+            <strong>周期：</strong>${days} · 从 ${escapeHtml(r.startDate)} 起每 ${r.intervalWeeks} 周<br>
             <strong>院区：</strong>${getLocationName(r.location)}<br>
             <strong>上午：</strong>${r.amEnabled ? `开诊 · ${r.amMax}人` : '停诊'}<br>
             <strong>下午：</strong>${r.pmEnabled ? `开诊 · ${r.pmMax}人` : '停诊'}
           </div>
           <div class="rule-actions">
-            <button class="btn-mini-blue" onclick="editRule('${r.id}')">编辑</button>
-            <button class="btn-mini-red" onclick="deleteRule('${r.id}')">删除</button>
+            <button class="btn-mini-blue" onclick="editRule('${safeId}')">编辑</button>
+            <button class="btn-mini-red" onclick="deleteRule('${safeId}')">删除</button>
           </div>
         </div>`;
       }).join('');
@@ -1706,7 +1743,8 @@
       document.getElementById('ruleModal').classList.add('active');
     }
 
-    function editRule(id) {
+    function editRule(safeId) {
+      const id = safeId.includes('%') ? decodeURIComponent(safeId) : safeId;
       const r = rules.find(x => x.id === id);
       if (!r) return;
       document.getElementById('ruleModalTitle').textContent = '编辑排班规则';
@@ -1737,7 +1775,7 @@
       const pmMax = parseInt(document.getElementById('rulePmMax').value) || 0;
 
       if (!name || daysOfWeek.length === 0 || !startDate) {
-        alert('请填写完整信息');
+        showToast('请填写完整信息', 'error');
         return;
       }
 
@@ -1761,7 +1799,8 @@
       syncRuleToOverrides(ruleData);
     }
 
-    function deleteRule(id) {
+    function deleteRule(safeId) {
+      const id = safeId.includes('%') ? decodeURIComponent(safeId) : safeId;
       if (!confirm('确定删除此规则？')) return;
       // 清除此规则生成的逐日覆盖
       const oldRule = rules.find(r => r.id === id);
@@ -1879,7 +1918,7 @@
 
       renderRuleList();
       renderCalendar();
-      alert('已恢复默认排班规则并同步到云端。\n\n请点击「批量排班」重新生成排班表。');
+      showToast('已恢复默认排班规则并同步到云端。请点击「批量排班」重新生成排班表。');
     }
 
     // ===== 节假日管理 =====
@@ -1937,10 +1976,12 @@
       // 异步推送到 Supabase
       try {
         for (const r of rules) {
+          // 用 upsert（POST + on_conflict）保证新增规则也能写入云端
           await sbFetch('schedule_rules', {
-            method: 'PATCH',
-            query: `?id=eq.${r.id}`,
+            method: 'POST',
+            query: '?on_conflict=id',
             body: {
+              id: r.id,
               name: r.name, days_of_week: r.daysOfWeek, location: r.location,
               start_date: r.startDate, interval_weeks: r.intervalWeeks,
               am_enabled: r.amEnabled, am_max: r.amMax,
@@ -2112,16 +2153,44 @@
           const data = JSON.parse(e.target.result);
           if (data.rules) rules = data.rules;
           if (data.schedule) schedule = data.schedule;
+          const importedAppts = data.appointments || [];
           if (data.appointments) appointments = data.appointments;
           if (data.holidays) holidays = data.holidays;
           saveData();
-          renderCalendar();
-          renderAppointmentList();
-          updateStats();
-          renderRuleList();
-          alert('数据导入成功');
+          // 导入的预约：先逐条 upsert 到 Supabase，失败的标记到 changedApptIds 待 saveData 重试
+          (async () => {
+            let okCount = 0, failCount = 0;
+            for (const a of importedAppts) {
+              try {
+                const r = await sbFetch('appointments', {
+                  method: 'POST',
+                  query: '?on_conflict=id',
+                  body: {
+                    id: a.id, patient_name: a.name, patient_card: a.card, slot: a.slot,
+                    location: a.location, age: a.age, status: a.status,
+                    date: a.date, note: a.note || null, is_return: a.isReturn || false,
+                    created_at: a.createdAt || new Date().toISOString()
+                  }
+                });
+                if (r !== null) okCount++; else { failCount++; changedApptIds.add(a.id); }
+              } catch (err) {
+                failCount++;
+                changedApptIds.add(a.id);
+                console.error('Import sync appt failed', a.id, err);
+              }
+            }
+            renderCalendar();
+            renderAppointmentList();
+            updateStats();
+            renderRuleList();
+            if (failCount === 0) {
+              showToast(`数据导入成功（${okCount} 条预约已同步到云端）`);
+            } else {
+              showToast(`导入完成：${okCount} 条同步成功，${failCount} 条待重试`, 'error');
+            }
+          })();
         } catch (err) {
-          alert('导入失败：文件格式错误');
+          showToast('导入失败：文件格式错误', 'error');
         }
       };
       reader.readAsText(file);
@@ -2132,7 +2201,6 @@
       const el = document.getElementById(id);
       if (el) {
         el.classList.remove('active');
-        el.style.display = 'none';
       }
     }
 
@@ -2148,7 +2216,7 @@
         sessionStorage.setItem('ortho_admin_login', 'yes');
         document.getElementById('loginOverlay').style.display = 'none';
       } else {
-        alert('密码错误');
+        showToast('密码错误', 'error');
       }
     }
 
