@@ -697,7 +697,7 @@
             </div>
             <div class="form-group">
               <label>就诊卡号</label>
-              <input type="text" id="patientCard" placeholder="请输入卡号">
+              <input type="text" id="patientCard" placeholder="请输入卡号（自费卡）">
             </div>
             <div class="checkbox-row">
               <input type="checkbox" id="isReturnVisit" onchange="updateReturnBadge()">
@@ -931,6 +931,9 @@
     function getDateKey(d) { return formatDate(d); }
     function isHoliday(dateStr) { return holidays.includes(dateStr); }
     function getLocationName(loc) { return loc === 'south' ? '南部' : loc === 'east' ? '东部' : '停诊'; }
+    function normalizeCard(card) {
+      return (card || '').trim();
+    }
     const LOCATION_ADDRESSES = {
       south: '黄浦区瞿溪路500号 新门诊楼7楼 口腔正畸科',
       east: '浦东新区祝桥镇云亭路99号 口腔楼4楼'
@@ -1153,10 +1156,11 @@
     function submitBooking() {
       try {
         const name = document.getElementById('patientName').value.trim();
-        const card = document.getElementById('patientCard').value.trim();
+        const card = normalizeCard(document.getElementById('patientCard').value);
         const note = document.getElementById('patientNote').value.trim();
         const isReturn = document.getElementById('isReturnVisit').checked;
         if (!name || !card) { alert('请填写完整信息'); return; }
+        if (!/^(131|H00)/i.test(card) || card.length !== 15) { alert('自费卡号格式有误（131或H00开头，共15位）'); return; }
         if (!selectedDate || !selectedSlot) { alert('请先选择日期和时段'); return; }
 
         const ds = getDaySchedule(selectedDate);
