@@ -478,7 +478,7 @@
         </div>
         <div class="form-group">
           <label>就诊卡号</label>
-          <input type="text" id="patientCard" placeholder="请输入卡号" inputmode="numeric" oninput="autoFillAge()">
+          <input type="text" id="patientCard" placeholder="请输入卡号（自费卡）" oninput="autoFillAge()">
         </div>
         <div class="form-group">
           <label>年龄</label>
@@ -797,6 +797,14 @@
     }
 
     // ===== 17:00截止 =====
+    function normalizeCard(card) {
+      return (card || '').trim();
+    }
+
+    function isValidCard(card) {
+      return /^(131|H00)/i.test(card) && card.length === 15;
+    }
+
     function isSlotBookable(date, slot) {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -960,13 +968,14 @@
     async function submitBooking() {
       try {
         const name = document.getElementById('patientName').value.trim();
-        const card = document.getElementById('patientCard').value.trim();
+        const card = normalizeCard(document.getElementById('patientCard').value);
         const note = document.getElementById('patientNote').value.trim();
         const isReturn = document.getElementById('isReturnVisit').checked;
         const age = parseInt(document.getElementById('patientAge').value);
 
         if (!name) { alert('请输入患者姓名'); return; }
         if (!card) { alert('请输入就诊卡号'); return; }
+        if (!isValidCard(card)) { alert('自费卡号格式有误（131或H00开头，共15位）'); return; }
         if (!age || age < 1 || age > 120) { alert('请填写有效的年龄'); return; }
         if (!selectedDate || !selectedSlot) { alert('请先选择日期和时段'); return; }
 
@@ -1061,7 +1070,7 @@
 
     // ===== 查询预约 =====
     async function queryAppointments() {
-      const card = document.getElementById('queryCard').value.trim();
+      const card = normalizeCard(document.getElementById('queryCard').value);
       const resultDiv = document.getElementById('queryResult');
 
       if (!card) { resultDiv.innerHTML = '<p style="color:#a0aec0;text-align:center;font-size:13px;">请输入卡号</p>'; return; }
