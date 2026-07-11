@@ -847,8 +847,9 @@
   <script>
     // ===== Supabase 配置（后台经 Cloudflare 代理访问，service_role 密钥不进浏览器）=====
     const ADMIN_KEY = 'Haoyayi2026#';
+    const API_BASE = 'https://duan-ortho.top'; // 后台统一走 Cloudflare 代理，GitHub 备用站也能用
     async function sbFetch(table, opts = {}) {
-      const url = `/api/sb/${table}${opts.query || ''}`;
+      const url = `${API_BASE}/api/sb/${table}${opts.query || ''}`;
       const headers = { 'x-admin-key': ADMIN_KEY };
       if (opts.method === 'POST' || opts.method === 'PATCH' || opts.method === 'PUT') {
         headers['Content-Type'] = 'application/json';
