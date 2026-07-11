@@ -530,11 +530,15 @@
       const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
       if (opts.method === 'POST' || opts.method === 'PATCH') {
         headers['Content-Type'] = 'application/json';
-        headers['Prefer'] = 'return=representation';
+        // RLS 加固后：anon 对 appointments 表 SELECT 策略为空，
+        // return=representation 会被 RLS 拒绝，因此用 return=minimal 提交成功后不返回行。
+        headers['Prefer'] = 'return=minimal';
       }
       const resp = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
       if (!resp.ok) throw new Error(`Supabase ${table} error: ${resp.status}`);
-      return opts.method === 'DELETE' ? null : resp.json();
+      if (opts.method === 'DELETE') return null;
+      const text = await resp.text();
+      return text ? JSON.parse(text) : null;
     }
 
     // ===== RPC 调用（绕过 RLS，只返回必要数据，不泄露他人隐私） =====
