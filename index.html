@@ -672,8 +672,8 @@
             age: appt.age || null
           }
         });
-        // 用 Supabase 返回的真实 ID 替换本地 ID
-        if (result && result.length > 0) {
+        // 用 Supabase 返回的真实 ID 替换本地 ID（RLS 加固后可能返回空数组，兼容处理）
+        if (result && result.length > 0 && result[0] && result[0].id) {
           appt.id = result[0].id.toString();
           // 更新本地 appointments 数组中的 ID
           const idx = appointments.findIndex(a => a.createdAt === appt.createdAt && a.name === appt.name);
