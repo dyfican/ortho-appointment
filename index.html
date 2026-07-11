@@ -438,7 +438,7 @@
         <div class="weekday">四</div><div class="weekday">五</div>
         <div class="weekday">六</div>
       </div>
-      <div class="calendar-grid" id="calendar"></div>
+      <div class="calendar-grid" id="calendar"><div style="grid-column:1/-1;text-align:center;color:#999;padding:36px 0;font-size:14px;">数据加载中…</div></div>
     </div>
 
     <!-- 时段选择 -->
@@ -602,57 +602,57 @@
 
     // ===== 加载数据（Supabase 优先，localStorage 兜底） =====
     async function loadData() {
-      try {
-        // 加载规则
-        const sbRules = await sbFetch('schedule_rules', { query: '?select=*' });
-        if (sbRules && sbRules.length > 0) {
-          rules = sbRules.map(r => ({
-            id: r.id, name: r.name,
-            daysOfWeek: r.days_of_week, location: r.location,
-            startDate: r.start_date, intervalWeeks: r.interval_weeks,
-            amEnabled: r.am_enabled, amMax: r.am_max,
-            pmEnabled: r.pm_enabled, pmMax: r.pm_max
-          }));
-        } else {
-          rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
-        }
-      } catch(e) {
-        console.warn('Supabase rules load failed, using defaults', e);
+      // 四个请求并行加载，避免顺序 await 叠加延迟（海外 Supabase 往返慢时尤其明显）
+      const [rulesRes, holidaysRes, countsRes, overridesRes] = await Promise.allSettled([
+        sbFetch('schedule_rules', { query: '?select=*' }),
+        sbFetch('holidays', { query: '?select=date' }),
+        sbRpc('get_all_slot_counts'),
+        sbFetch('schedule_overrides', { query: '?select=*' })
+      ]);
+
+      // 规则
+      const sbRules = rulesRes.status === 'fulfilled' ? rulesRes.value : null;
+      if (sbRules && sbRules.length > 0) {
+        rules = sbRules.map(r => ({
+          id: r.id, name: r.name,
+          daysOfWeek: r.days_of_week, location: r.location,
+          startDate: r.start_date, intervalWeeks: r.interval_weeks,
+          amEnabled: r.am_enabled, amMax: r.am_max,
+          pmEnabled: r.pm_enabled, pmMax: r.pm_max
+        }));
+      } else {
+        if (rulesRes.status === 'rejected') console.warn('Supabase rules load failed, using defaults', rulesRes.reason);
         rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
       }
 
-      try {
-        // 加载节假日
-        const sbHolidays = await sbFetch('holidays', { query: '?select=date' });
-        if (sbHolidays && sbHolidays.length > 0) {
-          holidays = sbHolidays.map(h => h.date);
-        }
-      } catch(e) {
-        console.warn('Supabase holidays load failed, using defaults', e);
+      // 节假日
+      const sbHolidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value : null;
+      if (sbHolidays && sbHolidays.length > 0) {
+        holidays = sbHolidays.map(h => h.date);
+      } else if (holidaysRes.status === 'rejected') {
+        console.warn('Supabase holidays load failed', holidaysRes.reason);
       }
 
-      try {
-        // 加载各时段已约数（不暴露患者隐私，RLS 已禁止直接读 appointments）
-        const counts = await sbRpc('get_all_slot_counts');
-        if (counts && Array.isArray(counts)) {
-          counts.forEach(c => { slotCountMap[`${c.date}_${c.slot}`] = c.booked_count; });
-        }
-      } catch(e) {
-        console.warn('Supabase slot counts load failed', e);
+      // 已约数（不暴露患者隐私，RLS 已禁止直接读 appointments）
+      const counts = countsRes.status === 'fulfilled' ? countsRes.value : null;
+      if (counts && Array.isArray(counts)) {
+        counts.forEach(c => { slotCountMap[`${c.date}_${c.slot}`] = c.booked_count; });
+      } else if (countsRes.status === 'rejected') {
+        console.warn('Supabase slot counts load failed', countsRes.reason);
       }
 
-      // 从 Supabase 加载逐日排班覆盖
-      try {
-        const sbOverrides = await sbFetch('schedule_overrides', { query: '?select=*' });
-        if (sbOverrides && sbOverrides.length > 0) {
-          sbOverrides.forEach(o => {
-            schedule[o.date] = {
-              am: { enabled: o.am_enabled, location: o.am_location, maxSlot: o.am_max },
-              pm: { enabled: o.pm_enabled, location: o.pm_location, maxSlot: o.pm_max }
-            };
-          });
-        }
-      } catch(e) { console.warn('Supabase schedule overrides load failed', e); }
+      // 逐日排班覆盖
+      const sbOverrides = overridesRes.status === 'fulfilled' ? overridesRes.value : null;
+      if (sbOverrides && sbOverrides.length > 0) {
+        sbOverrides.forEach(o => {
+          schedule[o.date] = {
+            am: { enabled: o.am_enabled, location: o.am_location, maxSlot: o.am_max },
+            pm: { enabled: o.pm_enabled, location: o.pm_location, maxSlot: o.pm_max }
+          };
+        });
+      } else if (overridesRes.status === 'rejected') {
+        console.warn('Supabase schedule overrides load failed', overridesRes.reason);
+      }
 
       // 本地记忆功能仍用 localStorage（设备级别，合理）
       loadLastPatient();
