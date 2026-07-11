@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>段医生正畸门诊 · 管理后台</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="loadQRCodeFallback()"></script>
+  <script src="qrcode.min.js" onerror="loadQRCodeFallback()"></script>
   <script>
     function loadQRCodeFallback() {
       var s = document.createElement('script');
@@ -845,14 +845,11 @@
   </div>
 
   <script>
-    // ===== Supabase 配置 =====
-    const SB_URL = 'https://bdfwzfwgjtqjbouutlnd.supabase.co';
-    const SB_KEY = 'sb_publishable_sCup7QMIEVdad6Lo22hP7g_lTqs-viR';
-
-    const ADMIN_KEY = '1234568';
+    // ===== Supabase 配置（后台经 Cloudflare 代理访问，service_role 密钥不进浏览器）=====
+    const ADMIN_KEY = 'Haoyayi2026#';
     async function sbFetch(table, opts = {}) {
-      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
-      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'x-admin-key': ADMIN_KEY };
+      const url = `/api/sb/${table}${opts.query || ''}`;
+      const headers = { 'x-admin-key': ADMIN_KEY };
       if (opts.method === 'POST' || opts.method === 'PATCH' || opts.method === 'PUT') {
         headers['Content-Type'] = 'application/json';
         // upsert（on_conflict）需要 merge-duplicates 头，否则重复键会报错
@@ -863,7 +860,11 @@
         }
       }
       const resp = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
-      if (!resp.ok) throw new Error(`Supabase ${table} error: ${resp.status}`);
+      if (!resp.ok) {
+        let msg = `Supabase ${table} error: ${resp.status}`;
+        try { const e = await resp.json(); if (e && e.message) msg += ' - ' + e.message; } catch (_) {}
+        throw new Error(msg);
+      }
       return opts.method === 'DELETE' ? null : resp.json();
     }
 
