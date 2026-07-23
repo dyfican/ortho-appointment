@@ -416,6 +416,24 @@
     }
 
     .hidden { display: none !important; }
+    /* 登记模块 */
+    .header-btn { margin-top:10px; background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.5); border-radius:8px; padding:6px 14px; font-size:13px; cursor:pointer; }
+    .header-btn:active { background:rgba(255,255,255,0.35); }
+    .seg { display:flex; gap:8px; }
+    .seg-opt { flex:1; text-align:center; padding:10px 6px; border:2px solid #e2e8f0; border-radius:10px; font-size:14px; cursor:pointer; background:white; transition:all .15s; }
+    .seg-opt.selected { border-color:#c53030; background:#fff5f5; color:#c53030; font-weight:600; }
+    .reg-guidance { background:#fffaf0; border:1px solid #feb2b2; border-radius:8px; padding:10px 12px; margin-bottom:12px; font-size:13px; color:#744210; }
+    .reg-guidance h4 { font-size:13px; margin-bottom:6px; color:#c53030; }
+    .reg-guidance ul { margin:0; padding-left:18px; }
+    .reg-guidance li { margin:3px 0; }
+    .gi-loc { color:#3182ce; font-size:12px; }
+    .chk-item { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; background:#f7fafc; border-radius:10px; margin-bottom:8px; }
+    .chk-item input { width:20px; height:20px; accent-color:#c53030; margin-top:2px; flex-shrink:0; }
+    .chk-item .ci-body { flex:1; }
+    .chk-item .ci-name { font-size:14px; font-weight:600; color:#2d3748; }
+    .chk-item .ci-loc { font-size:12px; color:#3182ce; margin-top:2px; }
+    .chk-item.done .ci-name { text-decoration:line-through; color:#a0aec0; }
+    .chk-item .ci-skip { font-size:12px; color:#718096; margin-left:8px; cursor:pointer; white-space:nowrap; }
   </style>
 </head>
 <body>
@@ -423,6 +441,7 @@
     <header>
       <h1>段医生正畸门诊</h1>
       <p>在线预约 · 请选择就诊日期</p>
+      <button class="header-btn" onclick="openRegistration()">复诊登记</button>
     </header>
 
     <!-- 日历 -->
@@ -492,9 +511,68 @@
           <label>备注（选填）</label>
           <textarea id="patientNote" rows="2" placeholder="特殊需求、过敏史等..."></textarea>
         </div>
+        <div class="form-group" id="returnCampusGroup" style="display:none;">
+          <label>加工件返回院区</label>
+          <div class="seg" id="returnCampusSeg">
+            <div class="seg-opt selected" data-rc="south" onclick="selectReturnCampus('south')">南部</div>
+            <div class="seg-opt" data-rc="east" onclick="selectReturnCampus('east')">东部</div>
+          </div>
+          <div style="font-size:11px;color:#718096;margin-top:4px;">默认=本次预约院区，可手动改（同步至医生端）</div>
+        </div>
         <button class="btn-primary" onclick="submitBooking()">确认预约</button>
       </div>
     </div>
+
+    <!-- 复诊 / 初诊登记 -->
+    <div class="card" id="regCard" style="display:none;">
+      <div class="card-title">
+        <span>复诊 / 初诊登记</span>
+        <span style="margin-left:auto;cursor:pointer;color:#c53030;font-size:13px;" onclick="closeRegistration()">收起 ✕</span>
+      </div>
+
+      <!-- 步骤A：表单 -->
+      <div id="regForm">
+        <div class="form-group">
+          <label>登记类型</label>
+          <div class="seg" id="regTypeSeg">
+            <div class="seg-opt selected" data-type="new_patient" onclick="selectRegType('new_patient')">初诊检查</div>
+            <div class="seg-opt" data-type="broken" onclick="selectRegType('broken')">矫治器破损</div>
+            <div class="seg-opt" data-type="restart" onclick="selectRegType('restart')">隐形重启</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>登记院区（决定引导地点）</label>
+          <div class="seg" id="regCampusSeg">
+            <div class="seg-opt selected" data-campus="south" onclick="selectRegCampus('south')">南部</div>
+            <div class="seg-opt" data-campus="east" onclick="selectRegCampus('east')">东部</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>患者姓名</label>
+          <input type="text" id="regName" placeholder="请输入姓名">
+        </div>
+        <div class="form-group">
+          <label>就诊卡号</label>
+          <input type="text" id="regCardInput" placeholder="请输入卡号（自费卡）">
+        </div>
+        <div class="form-group">
+          <label>年龄</label>
+          <input type="number" id="regAge" placeholder="请输入年龄" inputmode="numeric" min="1" max="120">
+        </div>
+        <div id="regGuidance" class="reg-guidance"></div>
+        <button class="btn-primary" onclick="submitRegistration()">提交登记</button>
+        <button class="btn-secondary" id="resumeBtn" style="display:none;" onclick="resumeRegistration()">继续上次未完成的登记</button>
+      </div>
+
+      <!-- 步骤B：清单勾选 -->
+      <div id="regChecklist" style="display:none;">
+        <div id="regChecklistItems"></div>
+        <button class="btn-primary" onclick="guideToBooking()">引导预约并关联</button>
+        <button class="btn-secondary" onclick="finishRegistration()">完成登记</button>
+      </div>
+    </div>
+  </div>
+
 
     <!-- 患者查询与取消预约 -->
     <div class="card">
@@ -676,13 +754,18 @@
             age: appt.age || null
           }
         });
-        // 用 Supabase 返回的真实 ID 替换本地 ID（RLS 加固后可能返回空数组，兼容处理）
         if (result && result.length > 0 && result[0] && result[0].id) {
           appt.id = result[0].id.toString();
-          // 更新本地 appointments 数组中的 ID
-          const idx = appointments.findIndex(a => a.createdAt === appt.createdAt && a.name === appt.name);
-          if (idx >= 0) appointments[idx].id = appt.id;
+        } else {
+          // return=minimal：提交不回表，反查真实 id 以便关联 checklist
+          try {
+            const mine = await sbRpc('get_my_appointments', { p_card: appt.card });
+            const real = (mine || []).find(a => a.date === appt.date && a.slot === appt.slot && a.patient_name === appt.name);
+            if (real && real.id) appt.id = real.id.toString();
+          } catch(e) { console.warn('反查预约 id 失败', e); }
         }
+        const idx = appointments.findIndex(a => a.createdAt === appt.createdAt && a.name === appt.name);
+        if (idx >= 0) appointments[idx].id = appt.id;
       } catch(e) {
         console.error('Save to Supabase failed, saving locally', e);
         localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
@@ -976,6 +1059,12 @@
       document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
       document.querySelector(`[data-slot="${slot}"]`).classList.add('selected');
       document.getElementById('bookingForm').style.display = 'block';
+      if (localStorage.getItem(STORAGE_CHECKLIST)) {
+        document.getElementById('returnCampusGroup').style.display = 'block';
+        selectReturnCampus(cfg.location);
+      } else {
+        document.getElementById('returnCampusGroup').style.display = 'none';
+      }
     }
 
     // ===== 提交预约 =====
@@ -1032,7 +1121,19 @@
         };
         appointments.push(appt);
         slotCountMap[`${appt.date}_${appt.slot}`] = (slotCountMap[`${appt.date}_${appt.slot}`] || 0) + 1;
-        saveAppointmentToDB(appt); // 异步写入 Supabase
+        await saveAppointmentToDB(appt);
+        // 登记关联：若本次有未完成的 checklist，回填真实预约 id
+        const cid = localStorage.getItem(STORAGE_CHECKLIST);
+        if (cid && appt.id) {
+          try {
+            const rc = (typeof selectedReturnCampus !== 'undefined' && selectedReturnCampus) ? selectedReturnCampus : appt.location;
+            await sbRpc('attach_appointment_to_checklist', {
+              p_id: cid, p_appointment_id: parseInt(appt.id, 10),
+              p_date: appt.date, p_slot: appt.slot, p_campus: rc
+            });
+            showToast('已关联登记清单');
+          } catch(e) { console.warn('关联登记失败', e); }
+        }
         saveLastPatient(name, card, isReturn, age);
         setAgeForCard(card, age);
 
@@ -1162,9 +1263,173 @@
       showToast('已取消预约');
     }
 
+    // ===== 复诊 / 初诊登记模块 =====
+    const STORAGE_CHECKLIST = 'ortho_checklist_id';
+    const CAMPUS_LABEL = { south: '南部', east: '东部' };
+    // 院区引导文案：item_name -> {south, east}（南部队复用现有模板，东部按段医生确认填写）
+    const CAMPUS_GUIDE = {
+      'CBCT': { south: '在6楼登记拍片',                   east: '4楼休息候诊区中央，B区对面' },
+      'MRI':  { south: '工作日预约在2楼，周末在7号楼1楼',  east: '在1楼' },
+      'X线':  { south: '在6楼登记拍片',                   east: '4楼休息候诊区中央，B区对面' },
+      '查血': { south: '在1楼抽血',                       east: '1楼抽血' },
+      '拍照': { south: '在7楼护士台拉号（拿就诊卡或二维码）', east: '前台拉号' },
+      '口扫': { south: '在7楼护士台拉号（拿就诊卡或二维码）', east: '前台拉号' }
+    };
+    const TYPE_LABEL = { new_patient: '初诊检查', broken: '矫治器破损', restart: '隐形重启' };
+
+    let TEMPLATES = {};            // { type: [ {name, order, desc} ] }
+    let regType = 'new_patient';
+    let regCampus = 'south';
+    let selectedReturnCampus = 'south';
+    let currentChecklistId = null;
+    let currentChecklist = null;   // get_checklist_state 结果
+
+    async function loadTemplates() {
+      try {
+        const t = await sbFetch('checklist_templates', { query: '?select=template_type,item_name,sort_order,description,active&active=eq.true&order=template_type,sort_order' });
+        TEMPLATES = {};
+        (t || []).forEach(r => {
+          (TEMPLATES[r.template_type] = TEMPLATES[r.template_type] || []).push({ name: r.item_name, order: r.sort_order, desc: r.description });
+        });
+      } catch(e) { console.warn('load templates failed', e); }
+    }
+
+    function openRegistration() {
+      const card = document.getElementById('regCard');
+      card.style.display = 'block';
+      const lp = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.lastPatient)); } catch(e){ return null; } })();
+      if (lp) {
+        document.getElementById('regName').value = lp.name || '';
+        document.getElementById('regCardInput').value = lp.card || '';
+        if (lp.age) document.getElementById('regAge').value = lp.age;
+      }
+      const cid = localStorage.getItem(STORAGE_CHECKLIST);
+      document.getElementById('resumeBtn').style.display = cid ? 'block' : 'none';
+      renderGuidance();
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function closeRegistration() {
+      document.getElementById('regCard').style.display = 'none';
+    }
+    function selectRegType(t) {
+      regType = t;
+      document.querySelectorAll('#regTypeSeg .seg-opt').forEach(el => el.classList.toggle('selected', el.dataset.type === t));
+      renderGuidance();
+    }
+    function selectRegCampus(c) {
+      regCampus = c;
+      document.querySelectorAll('#regCampusSeg .seg-opt').forEach(el => el.classList.toggle('selected', el.dataset.campus === c));
+      renderGuidance();
+    }
+    function selectReturnCampus(c) {
+      selectedReturnCampus = c;
+      document.querySelectorAll('#returnCampusSeg .seg-opt').forEach(el => el.classList.toggle('selected', el.dataset.rc === c));
+    }
+    function regItems() {
+      let items = TEMPLATES[regType] || [];
+      if ((!items || items.length === 0) && regType === 'restart') items = TEMPLATES['new_patient'] || [];
+      return items;
+    }
+    function renderGuidance() {
+      const items = regItems();
+      const box = document.getElementById('regGuidance');
+      if (!items.length) { box.innerHTML = ''; return; }
+      box.innerHTML = `<h4>${TYPE_LABEL[regType] || regType} · ${CAMPUS_LABEL[regCampus]}院区 · 需完成以下准备</h4><ul>` +
+        items.map(it => `<li><b>${escapeHtml(it.name)}</b> <span class="gi-loc">${escapeHtml((CAMPUS_GUIDE[it.name] && CAMPUS_GUIDE[it.name][regCampus]) || it.desc || '')}</span></li>`).join('') +
+        `</ul>`;
+    }
+    async function submitRegistration() {
+      const name = document.getElementById('regName').value.trim();
+      const card = normalizeCard(document.getElementById('regCardInput').value);
+      const age = parseInt(document.getElementById('regAge').value);
+      if (!name) { showToast('请输入患者姓名', 'error'); return; }
+      if (!card) { showToast('请输入就诊卡号', 'error'); return; }
+      if (!isValidCard(card)) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
+      if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
+      try {
+        const id = await sbRpc('create_checklist_v2', { p_name: name, p_card: card, p_age: age, p_type: regType, p_campus: regCampus });
+        if (!id) throw new Error('创建失败');
+        currentChecklistId = id;
+        localStorage.setItem(STORAGE_CHECKLIST, id);
+        saveLastPatient(name, card, true, age);
+        await renderChecklist(id);
+        document.getElementById('regForm').style.display = 'none';
+        document.getElementById('regChecklist').style.display = 'block';
+        showToast('登记已创建，请按清单完成准备');
+      } catch(e) {
+        console.error(e);
+        showToast('登记出错：' + e.message, 'error');
+      }
+    }
+    async function resumeRegistration() {
+      const cid = localStorage.getItem(STORAGE_CHECKLIST);
+      if (!cid) return;
+      try {
+        const st = await sbRpc('get_checklist_state', { p_id: cid });
+        if (!st) { localStorage.removeItem(STORAGE_CHECKLIST); document.getElementById('resumeBtn').style.display = 'none'; showToast('未找到上次登记', 'error'); return; }
+        currentChecklistId = cid;
+        regCampus = st.campus || 'south';
+        document.querySelectorAll('#regCampusSeg .seg-opt').forEach(el => el.classList.toggle('selected', el.dataset.campus === regCampus));
+        await renderChecklist(cid);
+        document.getElementById('regForm').style.display = 'none';
+        document.getElementById('regChecklist').style.display = 'block';
+      } catch(e) { console.error(e); showToast('读取失败', 'error'); }
+    }
+    async function renderChecklist(id) {
+      const st = await sbRpc('get_checklist_state', { p_id: id });
+      currentChecklist = st;
+      const wrap = document.getElementById('regChecklistItems');
+      if (!st || !st.items || !st.items.length) {
+        wrap.innerHTML = '<p style="font-size:13px;color:#718096;">暂无具体条目，可直接引导预约。</p>';
+        return;
+      }
+      const campus = st.campus || regCampus;
+      wrap.innerHTML = st.items.map(it => `
+        <div class="chk-item ${it.completed ? 'done' : ''}" data-item="${it.id}">
+          <input type="checkbox" ${it.completed ? 'checked' : ''} onchange="toggleItem('${it.id}', this.checked, false)">
+          <div class="ci-body">
+            <div class="ci-name">${escapeHtml(it.item_name)}</div>
+            <div class="ci-loc">${escapeHtml((CAMPUS_GUIDE[it.item_name] && CAMPUS_GUIDE[it.item_name][campus]) || it.description || '')}</div>
+          </div>
+          ${it.completed ? '' : `<span class="ci-skip" onclick="toggleItem('${it.id}', false, true)">跳过</span>`}
+        </div>
+      `).join('');
+      if (st.appointment_date) {
+        const extra = document.createElement('p');
+        extra.style.cssText = 'font-size:12px;color:#48bb78;margin-top:6px;';
+        extra.textContent = `已关联预约：${st.appointment_date} ${st.appointment_slot === 'am' ? '上午' : '下午'} · 加工件返回${CAMPUS_LABEL[st.return_campus] || ''}院区`;
+        wrap.appendChild(extra);
+      }
+    }
+    async function toggleItem(itemId, completed, skipped) {
+      try {
+        await sbRpc('toggle_checklist_item', { p_item_id: itemId, p_completed: completed, p_skipped: skipped });
+        await renderChecklist(currentChecklistId);
+      } catch(e) { console.error(e); showToast('更新失败', 'error'); }
+    }
+    function guideToBooking() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showToast('请在上方日历选择日期完成预约，系统将自动关联本次登记');
+    }
+    async function finishRegistration() {
+      if (!currentChecklistId) return;
+      try {
+        await sbRpc('submit_checklist', { p_id: currentChecklistId });
+        showToast('登记已完成');
+        localStorage.removeItem(STORAGE_CHECKLIST);
+        currentChecklistId = null;
+        currentChecklist = null;
+        document.getElementById('regForm').style.display = 'block';
+        document.getElementById('regChecklist').style.display = 'none';
+        document.getElementById('returnCampusGroup').style.display = 'none';
+      } catch(e) { console.error(e); showToast('提交失败', 'error'); }
+    }
+
+
     // ===== 初始化 =====
     (async () => {
       await loadData();
+      await loadTemplates();
       renderCalendar();
     })();
   </script>
