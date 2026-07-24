@@ -1152,8 +1152,11 @@
     }
 
     function updateReturnBadge() {
+      // 守卫：仅在患者端预约表单元素存在时执行（admin 后台没有这些元素）
       const badge = document.getElementById('returnBadge');
-      badge.innerHTML = document.getElementById('isReturnVisit').checked
+      const cb = document.getElementById('isReturnVisit');
+      if (!badge || !cb) return;
+      badge.innerHTML = cb.checked
         ? '<span class="badge badge-return">复诊</span>'
         : '<span class="badge badge-new">初诊</span>';
     }
