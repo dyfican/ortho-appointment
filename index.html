@@ -446,6 +446,9 @@
       <button class="header-btn" onclick="openRegistration()">复诊登记</button>
     </header>
 
+    <!-- 数据状态行（无需开发者工具也能看到加载结果） -->
+    <div id="dataStatus" style="font-size:11px;color:#718096;text-align:center;margin:-4px 0 10px;min-height:14px;"></div>
+
     <!-- 日历 -->
     <div class="card">
       <div class="calendar-header">
@@ -606,7 +609,9 @@
 
     // Supabase REST 请求封装
     async function sbFetch(table, opts = {}) {
-      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
+      // 防缓存：每次请求追加时间戳，绕过医院代理/CDN 对 API 响应的缓存（曾导致旧排班数据被长期缓存）
+      const sep = (opts.query && opts.query.includes('?')) ? '&' : '?';
+      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}${sep}_t=${Date.now()}`;
       const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
       if (opts.method === 'POST' || opts.method === 'PATCH') {
         headers['Content-Type'] = 'application/json';
@@ -623,7 +628,8 @@
 
     // ===== RPC 调用（绕过 RLS，只返回必要数据，不泄露他人隐私） =====
     async function sbRpc(funcName, params = {}) {
-      const url = `${SB_URL}/rest/v1/rpc/${funcName}`;
+      // 同样追加时间戳防缓存
+      const url = `${SB_URL}/rest/v1/rpc/${funcName}?_t=${Date.now()}`;
       const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
       const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(params) });
       if (!resp.ok) throw new Error(`RPC ${funcName} error: ${resp.status}`);
@@ -702,7 +708,8 @@
 
       // 规则
       const sbRules = rulesRes.status === 'fulfilled' ? rulesRes.value : null;
-      if (sbRules && sbRules.length > 0) {
+      let rulesFromCloud = false;
+      if (sbRules && sbRules.length > 0 && sbRules[0] && sbRules[0].start_date) {
         rules = sbRules.map(r => ({
           id: r.id, name: r.name,
           daysOfWeek: normalizeDow(r.days_of_week), location: r.location,
@@ -710,10 +717,22 @@
           amEnabled: r.am_enabled, amMax: r.am_max,
           pmEnabled: r.pm_enabled, pmMax: r.pm_max
         }));
+        rulesFromCloud = true;
       } else {
         if (rulesRes.status === 'rejected') console.warn('Supabase rules load failed, using defaults', rulesRes.reason);
         rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
       }
+
+      // 状态行（可见，无需开发者工具）：显示规则来源与起始日，便于排查
+      try {
+        const ds = document.getElementById('dataStatus');
+        if (ds) {
+          const src = rulesFromCloud ? '云端' : '本地默认';
+          const first = rules[0] ? rules[0].startDate : '?';
+          ds.textContent = `排班数据：${src} · ${rules.length}条 · 起始 ${first}`;
+          ds.style.color = rulesFromCloud ? '#48bb78' : '#dd6b20';
+        }
+      } catch(e) {}
 
       // 节假日
       const sbHolidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value : null;
