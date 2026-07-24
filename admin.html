@@ -554,29 +554,45 @@
     .todo-head { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
     .todo-card { font-size:12px;color:#718096; }
     .todo-meta, .todo-proc { font-size:12px;color:#718096;margin-top:4px; }
-    .todo-proc { color:#3182ce; }    .sidebar { width:160px; flex-shrink:0; background:#2d3748; color:#e2e8f0; display:flex; flex-direction:column; padding:16px 10px; min-height:100vh; box-sizing:border-box; }
-    .sb-brand { font-size:14px; font-weight:600; text-align:center; padding:8px 0 14px; border-bottom:1px solid rgba(255,255,255,0.12); margin-bottom:12px; }
-    .sb-nav { display:flex; flex-direction:column; gap:8px; }
-    .sb-item { background:transparent; color:#e2e8f0; border:none; padding:12px 12px; border-radius:8px; font-size:14px; text-align:left; cursor:pointer; transition:background .15s; }
-    .sb-item:hover { background:rgba(255,255,255,0.1); }
-    .sb-item.active { background:#5a67d8; color:#fff; }
-    .sb-footer { margin-top:auto; display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.12); }
-    .sb-mini { background:rgba(255,255,255,0.15); color:#fff; border:none; padding:10px 8px; border-radius:8px; font-size:13px; cursor:pointer; }
-    .sb-mini:hover { background:rgba(255,255,255,0.28); }
+    .todo-proc { color:#3182ce; }    .sidebar { width:200px; flex-shrink:0; background:#2d3748; color:#e2e8f0; display:flex; flex-direction:column; padding:16px 12px; min-height:100vh; box-sizing:border-box; }
+    .sb-nav { display:flex; flex-direction:column; gap:6px; }
+    .sb-item { background:transparent; color:#e2e8f0; border:none; padding:13px 14px; border-radius:8px; font-size:14px; text-align:left; cursor:pointer; transition:background .15s; border-left:3px solid transparent; }
+    .sb-item:hover { background:rgba(255,255,255,0.08); }
+    .sb-item.active { background:rgba(255,255,255,0.15); color:#fff; border-left-color:#c53030; }
+    .sb-footer { margin-top:auto; display:flex; flex-direction:column; gap:8px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.12); }
+    .sb-mini { background:rgba(255,255,255,0.12); color:#fff; border:none; padding:10px 10px; border-radius:8px; font-size:13px; cursor:pointer; }
+    .sb-mini:hover { background:rgba(255,255,255,0.24); }
     #mainArea { flex:1; padding:20px; min-width:0; }
     .board-page { display:none; }
     .board-page.active { display:block; }
     .page-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
     .page-head h2 { margin:0; font-size:18px; color:#2d3748; }
     .schedule-tools { display:flex; gap:8px; flex-wrap:wrap; }
-    .follow-filters { margin-bottom:14px; }
-    .follow-filters .seg { max-width:600px; }
     .container { display:flex; align-items:stretch; }
+    .appt-board { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .appt-cal-cell { background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:4px 6px; min-height:48px; font-size:11px; cursor:pointer; }
+    .appt-cal-cell.empty { background:#f7fafc; }
+    .appt-cal-cell.full { background:#fed7d5; border-color:#feb2b2; }
+    .appt-cal-cell.selected { border-color:#c53030; border-width:2px; }
+    .appt-cal-day { font-weight:600; color:#2d3748; margin-bottom:2px; }
+    .appt-cal-slot { font-size:10px; color:#718096; }
+    .appt-cal-slot.full-slot { color:#c53030; font-weight:600; }
+    .appt-day-list { max-height:520px; overflow-y:auto; }
+    .appt-day-group { margin-bottom:14px; }
+    .appt-day-header { font-size:13px; font-weight:600; color:#2d3748; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #e2e8f0; }
+    .appt-patient-row { padding:4px 8px; border-radius:6px; font-size:13px; display:flex; align-items:center; gap:4px; }
+    .appt-patient-row:hover { background:#f7fafc; }
+    .todo-group { margin-bottom:18px; }
+    .todo-group-header { font-size:14px; font-weight:600; color:#2d3748; margin-bottom:8px; padding:6px 10px; border-radius:6px; background:#f7fafc; border-left:3px solid #cbd5e0; }
+    .todo-group-header.broken { border-left-color:#e53e3e; }
+    .todo-group-header.restart { border-left-color:#3182ce; }
+    .todo-group-header.new_patient { border-left-color:#38a169; }
     @media (max-width: 820px) {
       .container { flex-direction:column; }
-      .sidebar { width:100%; min-height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; }
+      .sidebar { width:100%; min-height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; padding:10px; }
       .sb-nav { flex-direction:row; flex:1; }
       .sb-footer { flex-direction:row; border-top:none; border-left:1px solid rgba(255,255,255,0.12); padding-top:0; padding-left:12px; margin-top:0; margin-left:auto; }
+      .appt-board { grid-template-columns:1fr; }
     }
 </style>
 </head>
@@ -597,103 +613,47 @@
     </header>
 
     <aside class="sidebar">
-      <div class="sb-brand">管理后台</div>
       <nav class="sb-nav">
-        <button class="sb-item active" data-board="follow" onclick="switchBoard('follow')">随访看板</button>
-        <button class="sb-item" data-board="appoint" onclick="switchBoard('appoint')">预约看板</button>
-        <button class="sb-item" data-board="schedule" onclick="switchBoard('schedule')">排班看板</button>
+        <button class="sb-item active" data-board="todo" onclick="switchBoard('todo')">📋 待办看板</button>
+        <button class="sb-item" data-board="appt" onclick="switchBoard('appt')">📅 预约看板</button>
+        <button class="sb-item" data-board="sched" onclick="switchBoard('sched')">⚙️ 排班看板</button>
       </nav>
       <div class="sb-footer">
-        <button class="sb-mini" onclick="exportData()">导出备份</button>
-        <button class="sb-mini" onclick="importData()">导入恢复</button>
+        <button class="sb-mini" onclick="exportData()">📤 导出备份</button>
+        <button class="sb-mini" onclick="importData()">📥 导入恢复</button>
         <input type="file" id="importFile" style="display:none" accept=".json" onchange="handleImport(event)">
       </div>
     </aside>
     <div id="mainArea">
-      <div id="page-follow" class="board-page active">
-        <div class="page-head"><h2>随访看板</h2></div>
-        <div id="boardSummary" class="board-summary"></div>
-        <div class="follow-filters">
-          <div class="seg" id="followGroupSeg">
-            <div class="seg-opt selected" data-g="all" onclick="setFollowGroup('all')">全部</div>
-            <div class="seg-opt" data-g="new_patient" onclick="setFollowGroup('new_patient')">初诊检查</div>
-            <div class="seg-opt" data-g="broken" onclick="setFollowGroup('broken')">矫治器破损</div>
-            <div class="seg-opt" data-g="restart" onclick="setFollowGroup('restart')">隐形重启</div>
-          </div>
-          <div class="seg" id="followTimeSeg" style="margin-top:8px;">
-            <div class="seg-opt selected" data-t="all" onclick="setFollowTime('all')">全部</div>
-            <div class="seg-opt" data-t="today" onclick="setFollowTime('today')">当日</div>
-            <div class="seg-opt" data-t="week" onclick="setFollowTime('week')">本周</div>
-            <div class="seg-opt" data-t="done" onclick="setFollowTime('done')">完成</div>
+      <div id="page-todo" class="board-page active">
+        <div class="page-head"><h2>待办看板</h2>
+          <div class="tabs">
+            <button class="tab active" onclick="setTodoTab('today', this)">当日</button>
+            <button class="tab" onclick="setTodoTab('week', this)">本周</button>
+            <button class="tab" onclick="setTodoTab('all', this)">全部</button>
+            <button class="tab" onclick="setTodoTab('done', this)">完成</button>
           </div>
         </div>
-        <div class="card"><h3>登记待办</h3><div class="appointment-list" id="todoList"></div></div>
-        <div class="card"><h3>完成·归档</h3><div class="appointment-list" id="doneList"></div></div>
+        <div id="todoBoardContent"></div>
       </div>
-      <div id="page-appoint" class="board-page">
+      <div id="page-appt" class="board-page">
         <div class="page-head"><h2>预约看板</h2></div>
-        <div class="card" id="bookingPanel">
-          <h3>预约登记</h3>
-          <div id="selectedDateDisplay" style="color:#c53030;font-size:13px;margin-bottom:10px;">请先在排班看板选择日期</div>
-          <div class="deadline-warning" id="deadlineWarning">今日17:00后，不可预约明天上午。请选择后天及以后。</div>
-          <div class="time-selector" id="timeSelector" style="display:none;">
-            <div class="time-option" data-slot="am" onclick="selectSlot('am')">
-              <div class="time-label">上午</div>
-              <div class="time-loc" id="amLocDisplay">--</div>
-              <div class="time-count" id="amCount">0/0</div>
-              <div class="time-addr" id="amAddrAdmin"></div>
+        <div class="appt-board">
+          <div class="card">
+            <div class="month-nav">
+              <button onclick="changeMonth(-1)">上月</button>
+              <span id="apptMonthLabel"></span>
+              <button onclick="changeMonth(1)">下月</button>
             </div>
-            <div class="time-option" data-slot="pm" onclick="selectSlot('pm')">
-              <div class="time-label">下午</div>
-              <div class="time-loc" id="pmLocDisplay">--</div>
-              <div class="time-count" id="pmCount">0/0</div>
-              <div class="time-addr" id="pmAddrAdmin"></div>
-            </div>
+            <div class="calendar" id="apptCalendar"></div>
           </div>
-          <div id="bookingForm" style="display:none;">
-            <div class="form-group"><label>患者姓名</label><input type="text" id="patientName" placeholder="请输入患者姓名"></div>
-            <div class="form-group"><label>就诊卡号</label><input type="text" id="patientCard" placeholder="请输入卡号（自费卡）"></div>
-            <div class="form-group"><label>年龄</label><input type="number" id="patientAge" min="1" max="120" placeholder="可选" style="width:80px;"></div>
-            <div class="checkbox-row"><input type="checkbox" id="isReturnVisit" onchange="updateReturnBadge()"><label for="isReturnVisit">复诊患者</label><span id="returnBadge"></span></div>
-            <div class="form-group"><label>备注</label><textarea id="patientNote" placeholder="特殊需求、过敏史等..."></textarea></div>
-            <button class="btn-primary" onclick="submitBooking()">确认预约</button>
+          <div class="card">
+            <h3 id="apptDayTitle">当日名单</h3>
+            <div id="apptDayList" class="appt-day-list"></div>
           </div>
-        </div>
-        <div class="card">
-          <h3>预约列表</h3>
-          <div class="filter-bar">
-            <div class="search-box" style="flex:1;margin-bottom:0;"><input type="text" id="searchInput" placeholder="搜索姓名、卡号..." oninput="renderAppointmentList()"></div>
-            <select id="filterStatus" onchange="renderAppointmentList()">
-              <option value="">全部状态</option><option value="booked">已预约</option><option value="arrived">已签到</option><option value="done">已完成</option><option value="cancel">已取消</option>
-            </select>
-            <select id="filterLocation" onchange="renderAppointmentList()">
-              <option value="">全部院区</option><option value="south">南部</option><option value="east">东部</option>
-            </select>
-          </div>
-          <div class="filter-bar" style="margin-top:8px;">
-            <input type="date" id="filterDate" onchange="renderAppointmentList()" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
-            <button class="btn-gray" style="padding:6px 12px;font-size:12px;" onclick="document.getElementById('filterDate').value='';renderAppointmentList();">清除日期</button>
-            <span style="font-size:12px;color:#718096;margin-left:auto;">按日期筛选方便通知患者</span>
-          </div>
-          <div class="appointment-list" id="appointmentList"></div>
-        </div>
-        <div class="card">
-          <h3>日期视图</h3>
-          <div class="filter-bar">
-            <select id="dvFilterLocation" onchange="renderDateView()"><option value="">全部院区</option><option value="south">南部</option><option value="east">东部</option></select>
-            <select id="dvFilterStatus" onchange="renderDateView()"><option value="">全部状态</option><option value="booked">已预约</option><option value="arrived">已签到</option><option value="done">已完成</option><option value="cancel">已取消</option></select>
-            <input type="date" id="dvFilterDate" onchange="renderDateView()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
-            <button class="btn-gray" style="padding:5px 10px;font-size:11px;" onclick="document.getElementById('dvFilterDate').value='';renderDateView();">清除</button>
-          </div>
-          <div id="dvContent" style="max-height:600px;overflow-y:auto;"></div>
-        </div>
-        <div class="card">
-          <h3>统计</h3>
-          <div class="stats-row"><div class="stat-box"><div class="stat-number" id="totalAppt">0</div><div class="stat-label">总预约</div></div><div class="stat-box"><div class="stat-number" id="todayAppt">0</div><div class="stat-label">今日预约</div></div><div class="stat-box"><div class="stat-number" id="weekAppt">0</div><div class="stat-label">本周预约</div></div></div>
-          <div class="stats-row"><div class="stat-box"><div class="stat-number" id="arrivedAppt">0</div><div class="stat-label">今日已签到</div></div><div class="stat-box"><div class="stat-number" id="southAppt">0</div><div class="stat-label">南部预约</div></div><div class="stat-box"><div class="stat-number" id="eastAppt">0</div><div class="stat-label">东部预约</div></div></div>
         </div>
       </div>
-      <div id="page-schedule" class="board-page">
+      <div id="page-sched" class="board-page">
         <div class="page-head">
           <h2>排班看板</h2>
           <div class="schedule-tools">
@@ -703,7 +663,6 @@
           </div>
         </div>
         <div class="card">
-          <h3>日历排班</h3>
           <div class="month-nav">
             <button onclick="changeMonth(-1)">上月</button>
             <span id="monthLabel"></span>
@@ -712,7 +671,7 @@
           <div id="holidayAlert"></div>
           <div class="calendar" id="calendar"></div>
         </div>
-        <div class="card">
+        <div class="card" style="margin-top:14px;">
           <h3>排班规则</h3>
           <div id="ruleList"></div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -1282,6 +1241,7 @@
     // ===== 列表与统计 =====
     function renderAppointmentList() {
       const list = document.getElementById('appointmentList');
+      if (!list) return;
       const search = document.getElementById('searchInput').value.toLowerCase();
       const filterStatus = document.getElementById('filterStatus').value;
       const filterLocation = document.getElementById('filterLocation').value;
@@ -1300,9 +1260,6 @@
       });
       filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-      const todoCount = checklists.filter(cl => !cl.bonded && cl.status !== 'cancel').length;
-      const sumEl = document.getElementById('boardSummary');
-      if (sumEl) sumEl.innerHTML = '🔴 待办 <b>' + todoCount + '</b> 人 · 总预约 <b>' + appointments.length + '</b> 人';
       if (filtered.length === 0) {
         list.innerHTML = '<div class="empty-state">暂无匹配预约</div>';
         return;
@@ -1319,7 +1276,7 @@
         const eNote = escapeHtml(a.note);
         return `<div class="appt-item" data-aid="${safeId}">
           <div class="appt-info">
-            <div class="appt-name">${eName} <span style="font-weight:normal;color:#718096">(${eCard})</span>${hasTodo(a.card) ? ' <span class="todo-dot">🔴待办</span>' : ''}
+            <div class="appt-name">${eName} <span style="font-weight:normal;color:#718096">(${eCard})</span>
               ${a.age ? '<span class="badge" style="background:#E6F1FB;color:#0C447C;">'+a.age+'岁</span>' : ''}
               ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
               <span class="appt-status ${s.cls}">${s.text}</span>
@@ -1415,7 +1372,7 @@
               html += `<div class="dv-patient" data-aid="${safeId}">
                 <div class="dv-idx">${idx + 1}</div>
                 <div class="dv-info">
-                  <div class="dv-name">${eName}${hasTodo(a.card) ? ' <span class="todo-dot">🔴待办</span>' : ''}
+                  <div class="dv-name">${eName}
                     <span style="font-weight:normal;color:#718096;font-size:11px;">(${eCard})</span>
                     ${a.age ? '<span style="color:#718096;font-size:11px;"> · ' + a.age + '岁</span>' : ''}
                     ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
@@ -1456,7 +1413,7 @@
               html += `<div class="dv-patient" data-aid="${safeId}">
                 <div class="dv-idx">${idx + 1}</div>
                 <div class="dv-info">
-                  <div class="dv-name">${eName}${hasTodo(a.card) ? ' <span class="todo-dot">🔴待办</span>' : ''}
+                  <div class="dv-name">${eName}
                     <span style="font-weight:normal;color:#718096;font-size:11px;">(${eCard})</span>
                     ${a.age ? '<span style="color:#718096;font-size:11px;"> · ' + a.age + '岁</span>' : ''}
                     ${a.isReturn ? '<span class="badge badge-return">复诊</span>' : '<span class="badge badge-new">初诊</span>'}
@@ -1510,7 +1467,8 @@
     }
 
     // 事件委托：预约列表按钮点击
-    document.getElementById('appointmentList').addEventListener('click', function(e) {
+    var _apptListEl = document.getElementById('appointmentList');
+    if (_apptListEl) _apptListEl.addEventListener('click', function(e) {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
       const item = btn.closest('.appt-item');
@@ -1577,6 +1535,7 @@
     }
 
     function updateStats() {
+      if (!document.getElementById('totalAppt')) return;
       const today = formatDate(new Date());  // YYYY-MM-DD 格式
       const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
       const weekStartStr = formatDate(weekStart);
@@ -2251,15 +2210,20 @@
       }
     }
 
-    // ===== 登记清单（三看板联动）+ 侧栏看板切换 + 随访分组筛选 =====
+    // ===== 登记清单（三看板联动）+ 侧栏看板切换 V2 =====
     function normCard(c) { return (c || '').toString().trim().toLowerCase(); }
-    function hasTodo(card) {
-      return checklists.some(cl => normCard(cl.patient_card) === normCard(card) && !cl.bonded && cl.status !== 'cancel');
+    function hasTodo(card, name) {
+      return checklists.some(cl =>
+        (normCard(cl.patient_card) === normCard(card) || normCard(cl.patient_name) === normCard(name))
+        && !cl.bonded && cl.status !== 'cancel'
+      );
     }
     const CAMPUS_LABEL2 = { south: '南部', east: '东部' };
     const TYPE_LABEL2 = { new_patient: '初诊检查', broken: '矫治器破损', restart: '隐形重启' };
-    let followGroup = 'all';
-    let followTime = 'all';
+    const TYPE_ORDER = ['broken', 'restart', 'new_patient'];
+    let todoTab = 'today';
+    let apptCalDate = null;
+
     async function markBonded(id) {
       try {
         const r = await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${id}`, body: { bonded: true } });
@@ -2267,7 +2231,7 @@
         const cl = checklists.find(x => x.id === id);
         if (cl) cl.bonded = true;
         showToast('已标记为佩戴矫治器');
-        renderTodoBoard(); renderDoneBoard(); renderAppointmentList(); renderDateView();
+        renderTodoBoard(); renderApptDayList();
       } catch(e) { console.error(e); showToast('标记失败：' + e.message, 'error'); }
     }
     async function clearLinkedChecklist(apptId) {
@@ -2275,66 +2239,182 @@
         await sbFetch('checklists', { method: 'PATCH', query: `?appointment_id=eq.${apptId}`, body: { appointment_id: null } });
       } catch(e) { console.warn('clear linked checklist failed', e); }
     }
+
+    // ===== 待办看板：4 tabs（当日/本周/全部/完成）+ 三类型分组 =====
+    function setTodoTab(tab, btn) {
+      todoTab = tab;
+      document.querySelectorAll('#page-todo .tabs .tab').forEach(t => t.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      renderTodoBoard();
+    }
+    function todoCardHtml(cl) {
+      const eName = escapeHtml(cl.patient_name);
+      const eCard = escapeHtml(cl.patient_card || '');
+      const items = [];
+      if (cl.checklist_type) items.push('类型：' + (TYPE_LABEL2[cl.checklist_type] || cl.checklist_type));
+      if (cl.campus) items.push('登记院区：' + (CAMPUS_LABEL2[cl.campus] || cl.campus));
+      if (cl.return_campus) items.push('加工件返回：' + (CAMPUS_LABEL2[cl.return_campus] || cl.return_campus));
+      if (cl.appointment_date) items.push('关联预约：' + cl.appointment_date + ' ' + (cl.appointment_slot === 'am' ? '上午' : '下午'));
+      const proc = [];
+      proc.push('加工件送回：' + (cl.sent ? '已送回' : '未送回'));
+      proc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
+      return `<div class="todo-item" data-clid="${cl.id}">
+        <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
+          ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
+          <button class="btn-mini-green" onclick="markBonded('${cl.id}')">标记已佩戴</button></div>
+        <div class="todo-meta">${items.join(' · ')}</div>
+        <div class="todo-proc">${proc.join(' · ')}</div></div>`;
+    }
     function renderTodoBoard() {
-      const el = document.getElementById('todoList');
+      const el = document.getElementById('todoBoardContent');
       if (!el) return;
-      let todo = checklists.filter(cl => !cl.bonded && cl.status !== 'cancel');
-      if (followGroup !== 'all') todo = todo.filter(cl => cl.checklist_type === followGroup);
-      if (followTime === 'today') {
-        const d = new Date().toISOString().slice(0,10);
-        todo = todo.filter(cl => (cl.appointment_date || '') === d);
-      } else if (followTime === 'week') {
-        const now = new Date(); const start = new Date(now); start.setDate(now.getDate() - now.getDay());
-        const end = new Date(start); end.setDate(start.getDate() + 7);
-        todo = todo.filter(cl => { const ad = cl.appointment_date ? new Date(cl.appointment_date) : null; return ad && ad >= start && ad < end; });
-      } else if (followTime === 'done') {
-        todo = checklists.filter(cl => cl.bonded && cl.status !== 'cancel');
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0,10);
+      const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
+      let list;
+      let isDone = false;
+      if (todoTab === 'done') {
+        list = checklists.filter(cl => cl.bonded && cl.status !== 'cancel');
+        isDone = true;
+      } else {
+        list = checklists.filter(cl => !cl.bonded && cl.status !== 'cancel');
+        if (todoTab === 'today') {
+          list = list.filter(cl => (cl.created_at || '').slice(0,10) === todayStr);
+        } else if (todoTab === 'week') {
+          list = list.filter(cl => {
+            const c = cl.created_at ? new Date(cl.created_at) : null;
+            return c && c >= weekStart && c < weekEnd;
+          });
+        }
       }
-      if (todo.length === 0) { el.innerHTML = '<div class="empty-state">暂无待办登记</div>'; return; }
-      el.innerHTML = todo.map(cl => {
-        const eName = escapeHtml(cl.patient_name);
-        const eCard = escapeHtml(cl.patient_card || '');
-        const items = [];
-        if (cl.checklist_type) items.push('类型：' + (TYPE_LABEL2[cl.checklist_type] || cl.checklist_type));
-        if (cl.campus) items.push('登记院区：' + (CAMPUS_LABEL2[cl.campus] || cl.campus));
-        if (cl.return_campus) items.push('加工件返回：' + (CAMPUS_LABEL2[cl.return_campus] || cl.return_campus));
-        if (cl.appointment_date) items.push('关联预约：' + cl.appointment_date + ' ' + (cl.appointment_slot === 'am' ? '上午' : '下午'));
-        const proc = [];
-        proc.push('加工件送回：' + (cl.sent ? '已送回' : '未送回'));
-        proc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
-        return `<div class="todo-item" data-clid="${cl.id}">
-          <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
-            ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
-            <button class="btn-mini-green" onclick="markBonded('${cl.id}')">标记已佩戴</button></div>
-          <div class="todo-meta">${items.join(' · ')}</div>
-          <div class="todo-proc">${proc.join(' · ')}</div></div>`;
-      }).join('');
-    }
-    function doneItemHtml(a) {
-      const worn = checklists.some(cl => normCard(cl.patient_card) === normCard(a.card) && cl.bonded);
-      return `<div class="dv-patient"><div class="dv-info">
-        <div class="dv-name">${escapeHtml(a.name)} <span style="font-weight:normal;color:#718096;font-size:11px;">(${escapeHtml(a.card || '')})</span>
-          ${a.age ? `<span style="color:#718096;font-size:11px;"> · ${a.age}岁</span>` : ''}
-          ${worn ? `<span class="badge" style="background:#c6f6d5;color:#22543d;">已佩戴</span>` : ''}
-          <span class="appt-status status-done">已完成</span></div>
-        <div class="dv-meta">${a.date} ${a.slot === 'am' ? '上午' : '下午'} · ${getLocationName(a.location)}</div></div>`;
-    }
-    function renderDoneBoard() {
-      const el = document.getElementById('doneList');
-      if (!el) return;
-      const done = appointments.filter(a => a.status === 'done');
-      const cutoff = new Date(Date.now() - 30*24*60*60*1000);
-      const recent = done.filter(a => new Date(a.date) >= cutoff);
-      const archived = done.filter(a => new Date(a.date) < cutoff);
+      if (list.length === 0) {
+        el.innerHTML = isDone ? '<div class="empty-state">暂无已完成登记</div>'
+                              : '<div class="empty-state">暂无待办登记</div>';
+        return;
+      }
+      // 按三类型分组
       let html = '';
-      html += `<div class="dv-group"><div class="dv-date-header"><span>已完成（近30天）</span><span class="dv-count">${recent.length}</span></div>`;
-      html += recent.length ? recent.slice().sort((x,y)=>y.date.localeCompare(x.date)).map(doneItemHtml).join('') : '<div class="empty-state">暂无</div>';
-      html += `</div>`;
-      html += `<div class="dv-group"><div class="dv-date-header"><span>自动归档（超30天）</span><span class="dv-count">${archived.length}</span></div>`;
-      html += archived.length ? archived.slice().sort((x,y)=>y.date.localeCompare(x.date)).map(doneItemHtml).join('') : '<div class="empty-state">暂无</div>';
-      html += `</div>`;
+      if (isDone) {
+        // 完成栏：按时间排序，不分类型
+        html += '<div class="todo-group"><div class="todo-group-header">已完成（已佩戴矫治器）</div>';
+        html += list.slice().sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')).map(todoCardHtml).join('');
+        html += '</div>';
+      } else {
+        for (const t of TYPE_ORDER) {
+          const group = list.filter(cl => cl.checklist_type === t);
+          if (group.length === 0) continue;
+          html += `<div class="todo-group"><div class="todo-group-header ${t}">${TYPE_LABEL2[t]}（${group.length}）</div>`;
+          // 无预约日期置顶 + 红标"未预约"
+          group.sort((a,b) => {
+            if (!a.appointment_date && b.appointment_date) return -1;
+            if (a.appointment_date && !b.appointment_date) return 1;
+            return (a.appointment_date||'').localeCompare(b.appointment_date||'');
+          });
+          html += group.map(todoCardHtml).join('');
+          html += '</div>';
+        }
+        // 未分类
+        const etc = list.filter(cl => !TYPE_ORDER.includes(cl.checklist_type));
+        if (etc.length > 0) {
+          html += '<div class="todo-group"><div class="todo-group-header">其他</div>';
+          html += etc.map(todoCardHtml).join('');
+          html += '</div>';
+        }
+      }
       el.innerHTML = html;
     }
+
+    // ===== 预约看板：月历（已约/放号）+ 当日名单（只列名字+🔴待办）=====
+    function renderApptCalendar() {
+      const cal = document.getElementById('apptCalendar');
+      const ml = document.getElementById('apptMonthLabel');
+      if (!cal || !ml) return;
+      ml.textContent = currentYear + '年' + (currentMonth + 1) + '月';
+      cal.innerHTML = '';
+      const weekdays = ['日','一','二','三','四','五','六'];
+      weekdays.forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'weekday';
+        el.textContent = d;
+        cal.appendChild(el);
+      });
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0);
+      const pad = firstDay.getDay();
+      for (let i = 0; i < pad; i++) {
+        const el = document.createElement('div');
+        el.className = 'appt-cal-cell empty';
+        cal.appendChild(el);
+      }
+      for (let d = 1; d <= lastDay.getDate(); d++) {
+        const date = new Date(currentYear, currentMonth, d);
+        const ds = getDaySchedule(date);
+        const key = getDateKey(date);
+        const isHol = isHoliday(key);
+        const el = document.createElement('div');
+        el.className = 'appt-cal-cell';
+        let isFull = false;
+        let html = '<div class="appt-cal-day">' + d + (isHol ? '<span class="tag-holiday">假</span>' : '') + '</div>';
+        ['am','pm'].forEach(slot => {
+          const cfg = ds[slot];
+          const count = getSlotCount(date, slot);
+          const full = cfg.enabled && count >= cfg.maxSlot;
+          if (full) isFull = true;
+          if (cfg.enabled) {
+            html += '<div class="appt-cal-slot' + (full ? ' full-slot' : '') + '">' + (slot==='am'?'上':'下') + ' ' + count + '/' + cfg.maxSlot + '</div>';
+          } else {
+            html += '<div class="appt-cal-slot">休</div>';
+          }
+        });
+        el.innerHTML = html;
+        if (isFull) el.classList.add('full');
+        if (apptCalDate && date.toDateString() === apptCalDate.toDateString()) el.classList.add('selected');
+        el.onclick = () => { apptCalDate = date; renderApptCalendar(); renderApptDayList(); };
+        cal.appendChild(el);
+      }
+    }
+    function renderApptDayList() {
+      const el = document.getElementById('apptDayList');
+      const titleEl = document.getElementById('apptDayTitle');
+      if (!el) return;
+      if (!apptCalDate) {
+        if (titleEl) titleEl.textContent = '当日名单';
+        el.innerHTML = '<div class="empty-state">请在左侧日历选择日期</div>';
+        return;
+      }
+      const ds = apptCalDate.toISOString().slice(0,10);
+      const dateAppts = appointments.filter(a => a.date === ds && a.status !== 'cancel');
+      if (titleEl) {
+        const weekday = ['日','一','二','三','四','五','六'][apptCalDate.getDay()];
+        titleEl.textContent = (apptCalDate.getMonth()+1) + '月' + apptCalDate.getDate() + '日 周' + weekday + ' 共' + dateAppts.length + '人';
+      }
+      if (dateAppts.length === 0) {
+        el.innerHTML = '<div class="empty-state">当日无预约</div>';
+        return;
+      }
+      let html = '';
+      ['am','pm'].forEach(slot => {
+        const slotAppts = dateAppts.filter(a => a.slot === slot);
+        const cfg = getDaySchedule(apptCalDate)[slot];
+        if (slotAppts.length === 0 && !cfg.enabled) return;
+        const count = slotAppts.length;
+        const max = cfg.enabled ? cfg.maxSlot : 0;
+        html += '<div class="appt-day-group">';
+        html += '<div class="appt-day-header">' + (slot==='am'?'上午':'下午') + '（已约' + count + (max>0?'/放号'+max:'') + '）</div>';
+        if (slotAppts.length === 0) {
+          html += '<div class="empty-state" style="padding:8px;">暂无</div>';
+        } else {
+          slotAppts.forEach(a => {
+            const todo = hasTodo(a.card, a.name);
+            html += '<div class="appt-patient-row">' + escapeHtml(a.name) + (todo ? ' <span class="todo-dot">🔴待办</span>' : '') + '</div>';
+          });
+        }
+        html += '</div>';
+      });
+      el.innerHTML = html;
+    }
+
     function switchBoard(name) {
       document.querySelectorAll('.board-page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.sb-item').forEach(b => b.classList.remove('active'));
@@ -2342,31 +2422,19 @@
       if (page) page.classList.add('active');
       const btn = document.querySelector('.sb-item[data-board="' + name + '"]');
       if (btn) btn.classList.add('active');
-      if (name === 'appoint') { renderAppointmentList(); renderDateView(); updateStats(); }
-      else if (name === 'schedule') { renderCalendar(); renderRuleList(); }
-      else if (name === 'follow') { renderTodoBoard(); renderDoneBoard(); renderAppointmentList(); }
-    }
-    function setFollowGroup(g) {
-      followGroup = g;
-      document.querySelectorAll('#followGroupSeg .seg-opt').forEach(s => s.classList.toggle('selected', s.dataset.g === g));
-      renderTodoBoard();
-    }
-    function setFollowTime(t) {
-      followTime = t;
-      document.querySelectorAll('#followTimeSeg .seg-opt').forEach(s => s.classList.toggle('selected', s.dataset.t === t));
-      renderTodoBoard();
+      if (name === 'appt') { renderApptCalendar(); renderApptDayList(); }
+      else if (name === 'sched') { renderCalendar(); renderRuleList(); }
+      else if (name === 'todo') { renderTodoBoard(); }
     }
     // ===== 初始化 =====
     (async () => {
       await loadData();
       renderCalendar();
-      renderAppointmentList();
-      renderDateView();
-      updateStats();
       renderRuleList();
       renderTodoBoard();
-      renderDoneBoard();
-      switchBoard('follow');
+      renderApptCalendar();
+      renderApptDayList();
+      switchBoard('todo');
     })();
   </script>
 </body>
