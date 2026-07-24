@@ -421,6 +421,14 @@
     /* 登记模块 */
     .header-btn { margin-top:10px; background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.5); border-radius:8px; padding:6px 14px; font-size:13px; cursor:pointer; }
     .header-btn:active { background:rgba(255,255,255,0.35); }
+    /* B方案：红框包住整个顶部，标题占左2/3，蓝字登记入口在框内右侧1/3 */
+    .top-row { display:flex; align-items:center; gap:10px; background:linear-gradient(135deg,#c53030 0%,#9b2c2c 100%); border-radius:12px; padding:14px 16px; color:#fff; margin-bottom:12px; text-align:left; }
+    .reg-entry { flex:0 0 33%; }
+    .top-row header { flex:1; margin:0; background:transparent; padding:0; border-radius:0; text-align:left; }
+    .top-row header h1 { font-size:16px; font-weight:500; margin:0; color:#fff; }
+    .top-row header p { font-size:12px; margin:3px 0 0; opacity:0.9; color:#fff; }
+    .reg-btn { width:100%; background:transparent; color:#9ecbff; border:1px solid rgba(158,203,255,0.7); border-radius:8px; padding:11px 6px; font-size:13px; font-weight:500; cursor:pointer; }
+    .reg-btn:active { background:rgba(158,203,255,0.15); }
     .seg { display:flex; gap:8px; }
     .seg-opt { flex:1; text-align:center; padding:10px 6px; border:2px solid #e2e8f0; border-radius:10px; font-size:14px; cursor:pointer; background:white; transition:all .15s; }
     .seg-opt.selected { border-color:#c53030; background:#fff5f5; color:#c53030; font-weight:600; }
@@ -440,14 +448,15 @@
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1>段医生正畸门诊</h1>
-      <p>在线预约 · 请选择就诊日期</p>
-      <button class="header-btn" onclick="openRegistration()">复诊登记</button>
-    </header>
-
-    <!-- 数据状态行（无需开发者工具也能看到加载结果） -->
-    <div id="dataStatus" style="font-size:11px;color:#718096;text-align:center;margin:-4px 0 10px;min-height:14px;"></div>
+    <div class="top-row">
+      <header>
+        <h1>段医生正畸门诊</h1>
+        <p>在线预约 · 请选择就诊日期</p>
+      </header>
+      <div class="reg-entry">
+        <button class="reg-btn" onclick="openRegistration()">初诊/矫治器登记</button>
+      </div>
+    </div>
 
     <!-- 日历 -->
     <div class="card">
@@ -609,10 +618,9 @@
 
     // Supabase REST 请求封装
     async function sbFetch(table, opts = {}) {
-      // 防缓存：每次请求追加时间戳，绕过医院代理/CDN 对 API 响应的缓存（曾导致旧排班数据被长期缓存）
-      const sep = (opts.query && opts.query.includes('?')) ? '&' : '?';
-      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}${sep}_t=${Date.now()}`;
-      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
+      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
+      // 防缓存：用标准请求头 Cache-Control，避免像 ?_t= 那样被 PostgREST 当 filter 解析报 PGRST100
+      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Cache-Control': 'no-cache' };
       if (opts.method === 'POST' || opts.method === 'PATCH') {
         headers['Content-Type'] = 'application/json';
         // RLS 加固后：anon 对 appointments 表 SELECT 策略为空，
@@ -662,8 +670,8 @@
     const DEFAULT_RULES = [
       { id:'rule1', name:'周二东部每周', daysOfWeek:[2], location:'east', startDate:'2026-06-30', intervalWeeks:1, amEnabled:true, amMax:20, pmEnabled:true, pmMax:5 },
       { id:'rule2', name:'周四周五南部每周', daysOfWeek:[4,5], location:'south', startDate:'2026-07-02', intervalWeeks:1, amEnabled:true, amMax:25, pmEnabled:true, pmMax:25 },
-      { id:'rule3', name:'周六东部（第1周）', daysOfWeek:[6], location:'east', startDate:'2026-06-27', intervalWeeks:4, amEnabled:true, amMax:15, pmEnabled:true, pmMax:10 },
-      { id:'rule4', name:'周六东部（第2周）', daysOfWeek:[6], location:'east', startDate:'2026-07-04', intervalWeeks:4, amEnabled:true, amMax:15, pmEnabled:true, pmMax:10 },
+      { id:'rule3', name:'周六东部（第1周）', daysOfWeek:[6], location:'east', startDate:'2026-07-25', intervalWeeks:4, amEnabled:true, amMax:15, pmEnabled:true, pmMax:10 },
+      { id:'rule4', name:'周六东部（第2周）', daysOfWeek:[6], location:'east', startDate:'2026-08-01', intervalWeeks:4, amEnabled:true, amMax:15, pmEnabled:true, pmMax:10 },
       { id:'rule5', name:'周六南部（第3周）', daysOfWeek:[6], location:'south', startDate:'2026-07-11', intervalWeeks:4, amEnabled:true, amMax:22, pmEnabled:true, pmMax:3 },
       { id:'rule6', name:'周六南部（第4周）', daysOfWeek:[6], location:'south', startDate:'2026-07-18', intervalWeeks:4, amEnabled:true, amMax:22, pmEnabled:true, pmMax:3 }
     ];
@@ -724,17 +732,6 @@
         if (rulesRes.status === 'rejected') console.warn('Supabase rules load failed, using defaults', rulesRes.reason);
         rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
       }
-
-      // 状态行（可见，无需开发者工具）：显示规则来源与起始日，便于排查
-      try {
-        const ds = document.getElementById('dataStatus');
-        if (ds) {
-          const src = rulesFromCloud ? '云端' : '本地默认';
-          const first = rules[0] ? rules[0].startDate : '?';
-          ds.textContent = `排班数据：${src} · ${rules.length}条 · 起始 ${first}`;
-          ds.style.color = rulesFromCloud ? '#48bb78' : '#dd6b20';
-        }
-      } catch(e) {}
 
       // 节假日
       const sbHolidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value : null;

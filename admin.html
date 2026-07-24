@@ -556,7 +556,13 @@
     .todo-head { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
     .todo-card { font-size:12px;color:#718096; }
     .todo-meta, .todo-proc { font-size:12px;color:#718096;margin-top:4px; }
-    .todo-proc { color:#3182ce; }    .sidebar { width:200px; flex-shrink:0; background:#2d3748; color:#e2e8f0; display:flex; flex-direction:column; padding:16px 12px; min-height:100vh; box-sizing:border-box; }
+    .todo-proc { color:#3182ce; }
+    .todo-chk { margin-top:6px; display:flex; flex-wrap:wrap; gap:4px; }
+    .chk-tag { display:inline-block; font-size:12px; padding:2px 7px; border-radius:10px; background:#edf2f7; color:#4a5568; }
+    .chk-tag.done { background:#c6f6d5; color:#22543d; }
+    .chk-tag.skip { background:#faf089; color:#744210; }
+    .chk-tag.todo { background:#fed7d7; color:#822727; }
+    .sidebar { width:200px; flex-shrink:0; background:#2d3748; color:#e2e8f0; display:flex; flex-direction:column; padding:16px 12px; min-height:100vh; box-sizing:border-box; }
     .sb-nav { display:flex; flex-direction:column; gap:6px; }
     .sb-item { background:transparent; color:#e2e8f0; border:none; padding:13px 14px; border-radius:8px; font-size:14px; text-align:left; cursor:pointer; transition:background .15s; border-left:3px solid transparent; }
     .sb-item:hover { background:rgba(255,255,255,0.08); }
@@ -867,13 +873,13 @@
       {
         id: 'rule3', name: '周六东部（第1周）',
         daysOfWeek: [6], location: 'east',
-        startDate: '2026-06-27', intervalWeeks: 4,
+        startDate: '2026-07-25', intervalWeeks: 4,
         amEnabled: true, amMax: 15, pmEnabled: true, pmMax: 10
       },
       {
         id: 'rule4', name: '周六东部（第2周）',
         daysOfWeek: [6], location: 'east',
-        startDate: '2026-07-04', intervalWeeks: 4,
+        startDate: '2026-08-01', intervalWeeks: 4,
         amEnabled: true, amMax: 15, pmEnabled: true, pmMax: 10
       },
       {
@@ -894,6 +900,7 @@
     let schedule = {}; // dateKey -> { am: {enabled, location, maxSlot}, pm: {...} }
     let appointments = [];
     let checklists = [];
+    let checklistItems = []; // 登记项明细（初诊检查项完成情况）
     let changedApptIds = new Set(); // 跟踪有变更的预约 ID
     let currentMonth = new Date().getMonth();
     let currentYear = new Date().getFullYear();
@@ -2120,6 +2127,12 @@
         }
       } catch(e) { console.warn('checklists load failed', e); }
 
+      // 加载登记项明细（初诊检查项完成情况）
+      try {
+        const sbItems = await sbFetch('checklist_items', { query: '?select=*&order=sort_order.asc' });
+        if (sbItems) checklistItems = sbItems;
+      } catch(e) { console.warn('checklist_items load failed', e); }
+
       // schedule 以 Supabase 为准，不再从 localStorage 加载（避免旧数据覆盖规则）
 
       // 从 Supabase 加载逐日排班覆盖
@@ -2266,11 +2279,33 @@
     function todoCardHtml(cl) {
       const eName = escapeHtml(cl.patient_name);
       const eCard = escapeHtml(cl.patient_card || '');
-      const items = [];
-      if (cl.checklist_type) items.push('类型：' + (TYPE_LABEL2[cl.checklist_type] || cl.checklist_type));
-      if (cl.campus) items.push('登记院区：' + (CAMPUS_LABEL2[cl.campus] || cl.campus));
-      if (cl.return_campus) items.push('加工件返回：' + (CAMPUS_LABEL2[cl.return_campus] || cl.return_campus));
-      if (cl.appointment_date) items.push('关联预约：' + cl.appointment_date + ' ' + (cl.appointment_slot === 'am' ? '上午' : '下午'));
+      const meta = [];
+      if (cl.checklist_type) meta.push('类型：' + (TYPE_LABEL2[cl.checklist_type] || cl.checklist_type));
+      if (cl.campus) meta.push('登记院区：' + (CAMPUS_LABEL2[cl.campus] || cl.campus));
+      if (cl.return_campus && cl.checklist_type !== 'new_patient') meta.push('加工件返回：' + (CAMPUS_LABEL2[cl.return_campus] || cl.return_campus));
+      if (cl.appointment_date) meta.push('关联预约：' + cl.appointment_date + ' ' + (cl.appointment_slot === 'am' ? '上午' : '下午'));
+
+      // 初诊：展示已完成的检查内容（CBCT/X线/口扫/拍照等），无矫治器故隐藏"标记已佩戴"
+      if (cl.checklist_type === 'new_patient') {
+        const items = checklistItems.filter(i => i.checklist_id === cl.id).sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
+        let chkHtml;
+        if (items.length === 0) {
+          chkHtml = '<div class="todo-chk">暂无检查项</div>';
+        } else {
+          chkHtml = '<div class="todo-chk">' + items.map(i => {
+            const cls = i.completed ? 'done' : (i.skipped ? 'skip' : 'todo');
+            const mark = i.completed ? '✓' : (i.skipped ? '⊘' : '✗');
+            return `<span class="chk-tag ${cls}">${mark} ${escapeHtml(i.item_name)}</span>`;
+          }).join('') + '</div>';
+        }
+        return `<div class="todo-item" data-clid="${cl.id}">
+          <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
+            ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}</div>
+          <div class="todo-meta">${meta.join(' · ')}</div>
+          ${chkHtml}</div>`;
+      }
+
+      // 矫治器破损/隐形重启：加工件送回/签收流程 + 标记已佩戴
       const proc = [];
       proc.push('加工件送回：' + (cl.sent ? '已送回' : '未送回'));
       proc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
@@ -2278,7 +2313,7 @@
         <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
           ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
           <button class="btn-mini-green" onclick="markBonded('${cl.id}')">标记已佩戴</button></div>
-        <div class="todo-meta">${items.join(' · ')}</div>
+        <div class="todo-meta">${meta.join(' · ')}</div>
         <div class="todo-proc">${proc.join(' · ')}</div></div>`;
     }
     function renderTodoBoard() {
@@ -2399,7 +2434,7 @@
         el.innerHTML = '<div class="empty-state">请在左侧日历选择日期</div>';
         return;
       }
-      const ds = apptCalDate.toISOString().slice(0,10);
+      const ds = getDateKey(apptCalDate);
       const dateAppts = appointments.filter(a => a.date === ds && a.status !== 'cancel');
       if (titleEl) {
         const weekday = ['日','一','二','三','四','五','六'][apptCalDate.getDay()];
