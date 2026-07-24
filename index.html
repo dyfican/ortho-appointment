@@ -628,8 +628,10 @@
 
     // ===== RPC 调用（绕过 RLS，只返回必要数据，不泄露他人隐私） =====
     async function sbRpc(funcName, params = {}) {
-      // 同样追加时间戳防缓存
-      const url = `${SB_URL}/rest/v1/rpc/${funcName}?_t=${Date.now()}`;
+      // 注意：RPC 端点（POST /rest/v1/rpc/...）不接收额外 query 参数，
+      // 加 ?_t= 会被 PostgREST 当成 filter 报错（PGRST100），导致所有 RPC 失败。
+      // POST 请求本身不被浏览器/代理缓存，因此 RPC 不需要也不加 cache-buster。
+      const url = `${SB_URL}/rest/v1/rpc/${funcName}`;
       const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
       const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(params) });
       if (!resp.ok) throw new Error(`RPC ${funcName} error: ${resp.status}`);
