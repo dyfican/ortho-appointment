@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="cache-control" content="no-store">
+  <meta http-equiv="pragma" content="no-cache">
   <title>段医生正畸门诊 · 管理后台</title>
   <script src="qrcode.min.js" onerror="loadQRCodeFallback()"></script>
   <script>
@@ -901,6 +903,16 @@
     let dayConfigYear = currentYear;
 
     // ===== 工具函数 =====
+    function normalizeDow(raw) {
+      if (Array.isArray(raw)) return raw.map(Number);
+      if (typeof raw === 'number') return [raw];
+      if (typeof raw === 'string') {
+        const s = raw.trim();
+        const inner = (s.startsWith('{') && s.endsWith('}')) ? s.slice(1, -1) : s;
+        return inner.split(/[,，]/).map(x => parseInt(x, 10)).filter(n => !isNaN(n));
+      }
+      return [];
+    }
     function formatDate(d) {
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
@@ -950,7 +962,7 @@
       const day = date.getDay();
       const dateStr = getDateKey(date);
       for (const rule of rules) {
-        if (!rule.daysOfWeek.includes(day)) continue;
+        if (!normalizeDow(rule.daysOfWeek).includes(day)) continue;
         const start = new Date(rule.startDate); start.setHours(0,0,0,0);
         const target = new Date(dateStr); target.setHours(0,0,0,0);
         if (target < start) continue;
@@ -1686,7 +1698,7 @@
       }
       const dowNames = ['日','一','二','三','四','五','六'];
       container.innerHTML = rules.map((r, i) => {
-        const days = r.daysOfWeek.map(d => `周${dowNames[d]}`).join('、');
+        const days = normalizeDow(r.daysOfWeek).map(d => `周${dowNames[d]}`).join('、');
         const safeId = encodeURIComponent(r.id);
         return `<div class="rule-item">
           <h4>${i + 1}. ${escapeHtml(r.name)}</h4>
@@ -1726,7 +1738,7 @@
       document.getElementById('ruleModalTitle').textContent = '编辑排班规则';
       document.getElementById('ruleName').value = r.name;
       document.querySelectorAll('.ruleDow').forEach(cb => {
-        cb.checked = r.daysOfWeek.includes(parseInt(cb.value));
+        cb.checked = normalizeDow(r.daysOfWeek).includes(parseInt(cb.value));
       });
       document.getElementById('ruleLocation').value = r.location;
       document.getElementById('ruleStartDate').value = r.startDate;
@@ -1796,7 +1808,7 @@
         const d = new Date(dateKey);
         d.setHours(0, 0, 0, 0);
         if (d < start) continue;
-        if (!rule.daysOfWeek.includes(d.getDay())) continue;
+        if (!normalizeDow(rule.daysOfWeek).includes(d.getDay())) continue;
         const diffDays = Math.floor((d - start) / (24 * 60 * 60 * 1000));
         const diffWeeks = Math.floor(diffDays / 7);
         if (diffWeeks % rule.intervalWeeks !== 0) continue;
@@ -1832,7 +1844,7 @@
         const d = new Date(dateKey);
         d.setHours(0, 0, 0, 0);
         if (d < start) continue;
-        if (!rule.daysOfWeek.includes(d.getDay())) continue;
+        if (!normalizeDow(rule.daysOfWeek).includes(d.getDay())) continue;
         const diffDays = Math.floor((d - start) / (24 * 60 * 60 * 1000));
         const diffWeeks = Math.floor(diffDays / 7);
         if (diffWeeks % rule.intervalWeeks !== 0) continue;
@@ -1883,7 +1895,7 @@
           await sbFetch('schedule_rules', {
             method: 'POST',
             body: {
-              id: r.id, name: r.name, days_of_week: r.daysOfWeek, location: r.location,
+              id: r.id, name: r.name, days_of_week: normalizeDow(r.daysOfWeek), location: r.location,
               start_date: r.startDate, interval_weeks: r.intervalWeeks,
               am_enabled: r.amEnabled, am_max: r.amMax,
               pm_enabled: r.pmEnabled, pm_max: r.pmMax
@@ -1958,7 +1970,7 @@
             query: '?on_conflict=id',
             body: {
               id: r.id,
-              name: r.name, days_of_week: r.daysOfWeek, location: r.location,
+              name: r.name, days_of_week: normalizeDow(r.daysOfWeek), location: r.location,
               start_date: r.startDate, interval_weeks: r.intervalWeeks,
               am_enabled: r.amEnabled, am_max: r.amMax,
               pm_enabled: r.pmEnabled, pm_max: r.pmMax
@@ -2049,7 +2061,7 @@
         if (sbRules && sbRules.length > 0) {
           rules = sbRules.map(r => ({
             id: r.id, name: r.name,
-            daysOfWeek: r.days_of_week, location: r.location,
+            daysOfWeek: normalizeDow(r.days_of_week), location: r.location,
             startDate: r.start_date, intervalWeeks: r.interval_weeks,
             amEnabled: r.am_enabled, amMax: r.am_max,
             pmEnabled: r.pm_enabled, pmMax: r.pm_max

@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="cache-control" content="no-store">
+  <meta http-equiv="pragma" content="no-cache">
   <title>段医生正畸门诊预约</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -668,6 +670,16 @@
     let selectedSlot = null;
 
     // ===== 工具函数 =====
+    function normalizeDow(raw) {
+  if (Array.isArray(raw)) return raw.map(Number);
+  if (typeof raw === 'number') return [raw];
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    const inner = (s.startsWith('{') && s.endsWith('}')) ? s.slice(1, -1) : s;
+    return inner.split(/[,，]/).map(x => parseInt(x, 10)).filter(n => !isNaN(n));
+  }
+  return [];
+}
     function formatDate(d) {
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
@@ -693,7 +705,7 @@
       if (sbRules && sbRules.length > 0) {
         rules = sbRules.map(r => ({
           id: r.id, name: r.name,
-          daysOfWeek: r.days_of_week, location: r.location,
+          daysOfWeek: normalizeDow(r.days_of_week), location: r.location,
           startDate: r.start_date, intervalWeeks: r.interval_weeks,
           amEnabled: r.am_enabled, amMax: r.am_max,
           pmEnabled: r.pm_enabled, pmMax: r.pm_max
@@ -862,7 +874,7 @@
       const day = date.getDay();
       const dateStr = getDateKey(date);
       for (const rule of rules) {
-        if (!rule.daysOfWeek.includes(day)) continue;
+        if (!normalizeDow(rule.daysOfWeek).includes(day)) continue;
         const start = new Date(rule.startDate); start.setHours(0,0,0,0);
         const target = new Date(dateStr); target.setHours(0,0,0,0);
         if (target < start) continue;
