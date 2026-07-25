@@ -1312,7 +1312,7 @@
     let regCampus = 'south';
     let selectedReturnCampus = 'south';
     let currentChecklistId = null;
-    let currentChecklist = null;   // get_checklist_state 结果
+    let currentChecklist = null;   // 当前清单状态（直读 checklist_items）
 
     async function loadTemplates() {
       try {
@@ -1377,12 +1377,37 @@
       if (!isValidCard(card)) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
       if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
       try {
-        const id = await sbRpc('create_checklist_v2', { p_name: name, p_card: card, p_age: age, p_type: regType, p_campus: regCampus });
-        if (!id) throw new Error('创建失败');
-        currentChecklistId = id;
-        localStorage.setItem(STORAGE_CHECKLIST, id);
-        saveLastPatient(name, card, true, age);
-        await renderChecklist(id);
+        const hd = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+        // 去重：当天同姓名+同类型已有 pending 则复用（仿已验证的 checklist.html）
+        const today = new Date().toISOString().split('T')[0];
+        const existing = await sbFetch('checklists', { query: `?select=id&patient_name=eq.${encodeURIComponent(name)}&checklist_type=eq.${regType}&status=eq.pending&created_at=gte.${today}T00:00:00Z&order=created_at.desc&limit=1` });
+        let cid;
+        if (existing && existing.length) {
+          cid = existing[0].id;
+          showToast('已恢复您今天的清单');
+        } else {
+          // 1. 直写 checklists 主记录（只写线上库存在的列，仿 checklist.html，弃用坏掉的 RPC）
+          const clRes = await fetch(`${SB_URL}/rest/v1/checklists`, {
+            method: 'POST',
+            headers: { ...hd, 'Prefer': 'return=representation' },
+            body: JSON.stringify({ patient_name: name, checklist_type: regType, status: 'pending' })
+          });
+          if (!clRes.ok) throw new Error('创建清单失败: ' + clRes.status);
+          const cl = (await clRes.json())[0];
+          cid = cl && cl.id;
+          if (!cid) throw new Error('创建失败：未返回 id');
+          // 2. 读模板（restart 复用 broken，与 checklist.html 一致）
+          const tt = regType === 'restart' ? 'broken' : regType;
+          const tmpl = await sbFetch('checklist_templates', { query: `?select=item_name,sort_order,description&template_type=eq.${tt}&active=eq.true&order=sort_order.asc` });
+          if (!tmpl || !tmpl.length) { showToast('模板为空，请联系段医生', 'error'); return; }
+          // 3. 抄子项
+          await sbFetch('checklist_items', { method: 'POST', body: tmpl.map(t => ({ checklist_id: cid, item_name: t.item_name, sort_order: t.sort_order, description: t.description || '' })) });
+          saveLastPatient(name, card, true, age);
+        }
+        currentChecklistId = cid;
+        localStorage.setItem(STORAGE_CHECKLIST, cid);
+        localStorage.setItem('reg_campus', regCampus);
+        await renderChecklist(cid);
         document.getElementById('regForm').style.display = 'none';
         document.getElementById('regChecklist').style.display = 'block';
         showToast('登记已创建，请按清单完成准备');
@@ -1395,10 +1420,8 @@
       const cid = localStorage.getItem(STORAGE_CHECKLIST);
       if (!cid) return;
       try {
-        const st = await sbRpc('get_checklist_state', { p_id: cid });
-        if (!st) { localStorage.removeItem(STORAGE_CHECKLIST); document.getElementById('resumeBtn').style.display = 'none'; showToast('未找到上次登记', 'error'); return; }
         currentChecklistId = cid;
-        regCampus = st.campus || 'south';
+        regCampus = localStorage.getItem('reg_campus') || regCampus || 'south';
         document.querySelectorAll('#regCampusSeg .seg-opt').forEach(el => el.classList.toggle('selected', el.dataset.campus === regCampus));
         await renderChecklist(cid);
         document.getElementById('regForm').style.display = 'none';
@@ -1406,15 +1429,15 @@
       } catch(e) { console.error(e); showToast('读取失败', 'error'); }
     }
     async function renderChecklist(id) {
-      const st = await sbRpc('get_checklist_state', { p_id: id });
-      currentChecklist = st;
+      const items = await sbFetch('checklist_items', { query: `?select=id,item_name,description,completed,skipped,sort_order&checklist_id=eq.${id}&order=sort_order.asc` });
+      currentChecklist = { items: items || [] };
       const wrap = document.getElementById('regChecklistItems');
-      if (!st || !st.items || !st.items.length) {
+      if (!items || !items.length) {
         wrap.innerHTML = '<p style="font-size:13px;color:#718096;">暂无具体条目，可直接引导预约。</p>';
         return;
       }
-      const campus = st.campus || regCampus;
-      wrap.innerHTML = st.items.map(it => `
+      const campus = localStorage.getItem('reg_campus') || regCampus;
+      wrap.innerHTML = items.map(it => `
         <div class="chk-item ${it.completed ? 'done' : ''}" data-item="${it.id}">
           <input type="checkbox" ${it.completed ? 'checked' : ''} onchange="toggleItem('${it.id}', this.checked, false)">
           <div class="ci-body">
@@ -1424,16 +1447,10 @@
           ${it.completed ? '' : `<span class="ci-skip" onclick="toggleItem('${it.id}', false, true)">跳过</span>`}
         </div>
       `).join('');
-      if (st.appointment_date) {
-        const extra = document.createElement('p');
-        extra.style.cssText = 'font-size:12px;color:#48bb78;margin-top:6px;';
-        extra.textContent = `已关联预约：${st.appointment_date} ${st.appointment_slot === 'am' ? '上午' : '下午'} · 加工件返回${CAMPUS_LABEL[st.return_campus] || ''}院区`;
-        wrap.appendChild(extra);
-      }
     }
     async function toggleItem(itemId, completed, skipped) {
       try {
-        await sbRpc('toggle_checklist_item', { p_item_id: itemId, p_completed: completed, p_skipped: skipped });
+        await sbFetch('checklist_items', { method: 'PATCH', query: `?id=eq.${itemId}`, body: { completed: !!completed, skipped: !!skipped, completed_at: completed ? new Date().toISOString() : null } });
         await renderChecklist(currentChecklistId);
       } catch(e) { console.error(e); showToast('更新失败', 'error'); }
     }
@@ -1444,7 +1461,7 @@
     async function finishRegistration() {
       if (!currentChecklistId) return;
       try {
-        await sbRpc('submit_checklist', { p_id: currentChecklistId });
+        await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${currentChecklistId}`, body: { status: 'completed' } });
         showToast('登记已完成');
         localStorage.removeItem(STORAGE_CHECKLIST);
         currentChecklistId = null;
