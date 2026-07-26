@@ -1,14 +1,26 @@
 // Cloudflare Pages Function — 后台管理专用代理（动态路由捕获 /api/sb/<table>）
 // 路由：functions/api/sb/[[path]].js  →  访问 /api/sb/appointments?select=*
 // 作用：校验管理口令后，用 service_role 密钥转发到 Supabase。
-// 注意：允许跨域（CORS *），因为 GitHub Pages 备用站会跨域调用本代理；
-//       真实鉴权靠 x-admin-key 口令，CORS 开放不影响安全性。
+// 两种鉴权：
+//   x-admin-key → 完全权限（service_role，所有方法）—— 段医生后台 admin.html
+//   x-staff-key → 受限权限 —— 周医生视图 admin.html?staff=1
+//      仅允许 GET（只读白名单表）+ 对 checklists 的受限 PATCH（字段白名单）
+//      DELETE / POST / PUT 一律 405；非白名单字段在 PATCH 时被丢弃
+//     即使 staff key 泄露，也清不了表、改不了关键信息（卡号 / appointment_id 等）
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'x-admin-key, content-type, prefer, authorization',
+  'Access-Control-Allow-Headers': 'x-admin-key, x-staff-key, content-type, prefer, authorization',
 };
+
+// 周医生可读的表（均为只读，不含任何写操作）
+const STAFF_READ_TABLES = [
+  'appointments', 'checklists', 'checklist_items',
+  'schedule_rules', 'holidays', 'schedule_overrides'
+];
+// 周医生可改的 checklists 字段白名单
+const STAFF_ALLOWED_COLUMNS = ['workflow_stage', 'sent', 'received', 'bonded', 'status'];
 
 export async function onRequest(context) {
   const { request, env, params } = context;
@@ -18,9 +30,12 @@ export async function onRequest(context) {
     return new Response(null, { status: 204, headers: CORS });
   }
 
-  // 1) 校验管理口令（Cloudflare 环境变量 ADMIN_KEY，绝不进前端）
+  // 1) 鉴权：admin 优先，其次 staff
   const adminKey = request.headers.get('x-admin-key');
-  if (!adminKey || adminKey !== env.ADMIN_KEY) {
+  const staffKey = request.headers.get('x-staff-key');
+  const isAdmin = !!(adminKey && adminKey === env.ADMIN_KEY);
+  const isStaff = !!(staffKey && staffKey === env.STAFF_KEY);
+  if (!isAdmin && !isStaff) {
     return new Response(
       JSON.stringify({ error: 'Unauthorized' }),
       { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } }
@@ -37,7 +52,73 @@ export async function onRequest(context) {
     );
   }
 
-  // 3) 用 service_role 转发到 Supabase（绕过 RLS，拥有完整权限）
+  // 3) staff 受限分支（仅当 admin key 不在场时生效；admin 优先走原逻辑）
+  if (isStaff && !isAdmin) {
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      if (!STAFF_READ_TABLES.includes(table)) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden table for staff' }),
+          { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else if (request.method === 'PATCH') {
+      if (table !== 'checklists') {
+        return new Response(
+          JSON.stringify({ error: 'Staff can only PATCH checklists' }),
+          { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
+        );
+      }
+      // 字段白名单：只保留允许的列，丢弃其余（防越权改卡号 / appointment_id 等）
+      let raw = {};
+      try { raw = await request.json(); } catch (e) { raw = {}; }
+      const cleaned = {};
+      for (const col of STAFF_ALLOWED_COLUMNS) {
+        if (col in raw) cleaned[col] = raw[col];
+      }
+      const url = new URL(request.url);
+      const target = `${env.SUPABASE_URL}/rest/v1/${table}${url.search}`;
+      const headers = new Headers();
+      headers.set('apikey', env.SUPABASE_SERVICE_ROLE_KEY);
+      headers.set('Authorization', `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`);
+      const contentType = request.headers.get('content-type');
+      if (contentType) headers.set('Content-Type', contentType);
+      const prefer = request.headers.get('prefer');
+      if (prefer) headers.set('Prefer', prefer);
+      let resp;
+      try {
+        resp = await fetch(target, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(cleaned),
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: 'Upstream error: ' + e.message }),
+          { status: 502, headers: { ...CORS, 'Content-Type': 'application/json' } }
+        );
+      }
+      const respHeaders = new Headers();
+      const ct = resp.headers.get('Content-Type');
+      if (ct) respHeaders.set('Content-Type', ct);
+      const range = resp.headers.get('Content-Range');
+      if (range) respHeaders.set('Content-Range', range);
+      for (const [k, v] of Object.entries(CORS)) respHeaders.set(k, v);
+      return new Response(resp.body, {
+        status: resp.status,
+        statusText: resp.statusText,
+        headers: respHeaders,
+      });
+    } else {
+      // POST / PUT / DELETE 一律拒绝
+      return new Response(
+        JSON.stringify({ error: 'Staff key only allows GET and PATCH' }),
+        { status: 405, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      );
+    }
+    return;
+  }
+
+  // 4) admin 分支：原逻辑不变（全方法、service_role 转发）
   const url = new URL(request.url);
   const target = `${env.SUPABASE_URL}/rest/v1/${table}${url.search}`;
   const headers = new Headers();
@@ -68,7 +149,6 @@ export async function onRequest(context) {
     );
   }
 
-  // 4) 透传上游响应（附上 CORS 头，允许跨域调用）
   const respHeaders = new Headers();
   const ct = resp.headers.get('Content-Type');
   if (ct) respHeaders.set('Content-Type', ct);
