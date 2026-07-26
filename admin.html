@@ -929,10 +929,15 @@
         const navExport = document.getElementById('navExport'); if (navExport) navExport.style.display = 'none';
         const navScan = document.getElementById('navScan'); if (navScan) navScan.style.display = '';
         // 周医生口令门：把 ?k=口令 放进网址（添加到主屏的图标里），打开即自动进入、免手输
+        // 用 localStorage 持久记忆已验证设备，避免 PWA 启动 URL 丢失 key 时重新弹密码
         const k = new URLSearchParams(location.search).get('k');
+        const ov = document.getElementById('loginOverlay');
         if (k && (k === STAFF_KEY || k === ADMIN_KEY)) {
-          sessionStorage.setItem('ortho_admin_login', 'yes');
-          const ov = document.getElementById('loginOverlay'); if (ov) ov.style.display = 'none';
+          localStorage.setItem('ortho_staff_session', '1');
+          if (ov) ov.style.display = 'none';
+        } else if (localStorage.getItem('ortho_staff_session') === '1') {
+          // 已验证过此设备：PWA 启动 URL 可能不含 key，凭设备记忆免密进入
+          if (ov) ov.style.display = 'none';
         }
         const h2 = document.querySelector('#loginOverlay h2'); if (h2) h2.textContent = '周医生看板登录';
         const inp = document.getElementById('adminPassword'); if (inp) inp.placeholder = '请输入周医生口令';
@@ -2340,7 +2345,10 @@
 
     // ===== 登录验证 =====
     (function() {
-      if (sessionStorage.getItem('ortho_admin_login') === 'yes') {
+      // staff 免密仅在其专属上下文(?staff=1)生效；admin 不读此标记，必须输密码
+      const staffOk = IS_STAFF && localStorage.getItem('ortho_staff_session') === '1';
+      const adminOk = sessionStorage.getItem('ortho_admin_login') === '1';
+      if (staffOk || adminOk) {
         document.getElementById('loginOverlay').style.display = 'none';
       }
     })();
@@ -2348,7 +2356,11 @@
       const pwd = document.getElementById('adminPassword').value;
       const ok = IS_STAFF ? (pwd === STAFF_KEY || pwd === ADMIN_KEY) : (pwd === ADMIN_KEY);
       if (ok) {
-        sessionStorage.setItem('ortho_admin_login', 'yes');
+        if (IS_STAFF) {
+          localStorage.setItem('ortho_staff_session', '1'); // 周医生免密：持久记忆本机
+        } else {
+          sessionStorage.setItem('ortho_admin_login', '1'); // 管理员：仅当前标签页，关掉重开仍需密码
+        }
         document.getElementById('loginOverlay').style.display = 'none';
       } else {
         showToast('密码错误', 'error');

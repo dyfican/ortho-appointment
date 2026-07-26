@@ -2,7 +2,7 @@
   "name": "段医生正畸门诊 · 管理后台",
   "short_name": "正畸后台",
   "description": "医生端待办/预约/扫码看板",
-  "start_url": "/admin.html?staff=1",
+  "start_url": "/admin.html?staff=1&k=ZhouStaff2026%23ortho",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
