@@ -581,8 +581,8 @@
       <!-- 步骤B：清单勾选 -->
       <div id="regChecklist" style="display:none;">
         <div id="regChecklistItems"></div>
-        <button class="btn-primary" onclick="guideToBooking()">引导预约并关联</button>
-        <button class="btn-secondary" onclick="finishRegistration()">完成登记</button>
+        <button class="btn-primary" onclick="guideToBooking()">预约下次复诊时间</button>
+        <button class="btn-secondary" onclick="finishRegistration()">暂不预约复诊时间，完成登记</button>
       </div>
     </div>
   </div>
@@ -1378,21 +1378,34 @@
       if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
       try {
         const hd = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
-        // 去重：当天同姓名+同类型已有 pending 则复用（仿已验证的 checklist.html）
-        const today = new Date().toISOString().split('T')[0];
-        const existing = await sbFetch('checklists', { query: `?select=id&patient_name=eq.${encodeURIComponent(name)}&checklist_type=eq.${regType}&status=eq.pending&created_at=gte.${today}T00:00:00Z&order=created_at.desc&limit=1` });
+        // 去重：同卡号+同类型+未佩戴的 pending 记录（保留最后一次，其余软删 status=cancel）
+        const dup = await sbFetch('checklists', { query: `?select=id,created_at&patient_card=eq.${encodeURIComponent(card)}&checklist_type=eq.${regType}&status=eq.pending&bonded=eq.false&order=created_at.desc` });
         let cid;
-        if (existing && existing.length) {
-          cid = existing[0].id;
-          showToast('已恢复您今天的清单');
+        if (dup && dup.length) {
+          cid = dup[0].id;
+          // 软删其余旧记录，仅保留最新一条
+          for (const d of dup.slice(1)) {
+            await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${d.id}`, body: { status: 'cancel' } });
+          }
+          showToast('已恢复您上次的登记清单');
         } else {
-          // 1. 直写 checklists 主记录（只写线上库存在的列，仿 checklist.html，弃用坏掉的 RPC）
-          const clRes = await fetch(`${SB_URL}/rest/v1/checklists`, {
+          // 1. 直写 checklists 主记录（含卡号/年龄/院区；若列未迁移则降级为仅基础字段，保证不崩）
+          const baseBody = { patient_name: name, checklist_type: regType, status: 'pending' };
+          const fullBody = { ...baseBody, patient_card: card, patient_age: age, campus: regCampus };
+          let clRes = await fetch(`${SB_URL}/rest/v1/checklists`, {
             method: 'POST',
             headers: { ...hd, 'Prefer': 'return=representation' },
-            body: JSON.stringify({ patient_name: name, checklist_type: regType, status: 'pending' })
+            body: JSON.stringify(fullBody)
           });
-          if (!clRes.ok) throw new Error('创建清单失败: ' + clRes.status);
+          if (!clRes.ok) {
+            // 降级：workflow 相关列未就绪时只写基础字段
+            clRes = await fetch(`${SB_URL}/rest/v1/checklists`, {
+              method: 'POST',
+              headers: { ...hd, 'Prefer': 'return=representation' },
+              body: JSON.stringify(baseBody)
+            });
+            if (!clRes.ok) throw new Error('创建清单失败: ' + clRes.status);
+          }
           const cl = (await clRes.json())[0];
           cid = cl && cl.id;
           if (!cid) throw new Error('创建失败：未返回 id');
@@ -1456,13 +1469,15 @@
     }
     function guideToBooking() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      showToast('请在上方日历选择日期完成预约，系统将自动关联本次登记');
+      showToast('请在上方日历选择日期，预约下次复诊时间');
     }
     async function finishRegistration() {
       if (!currentChecklistId) return;
       try {
-        await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${currentChecklistId}`, body: { status: 'completed' } });
-        showToast('登记已完成');
+        // 患者端"完成登记"= 患者填表/准备完毕，临床流程仍待医生处理（方案设计/沟通），故保持 pending 留在待办看板；
+        // 切勿写 completed —— completed 是医生端"方案沟通完成"的终态信号，否则会提前误入"已完成"看板。
+        await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${currentChecklistId}`, body: { status: 'pending' } });
+        showToast('暂不预约复诊时间，登记已完成');
         localStorage.removeItem(STORAGE_CHECKLIST);
         currentChecklistId = null;
         currentChecklist = null;

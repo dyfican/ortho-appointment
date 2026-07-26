@@ -548,6 +548,11 @@
       .modal { width: 92%; max-width: 340px; }
       .appt-actions { flex-wrap: wrap; }
       .btn-mini-green, .btn-mini-blue, .btn-mini-red, .btn-mini-gray { padding: 2px 6px; font-size: 10px; }
+      /* 手机端：待办 tabs 横向滚动 + 触控加大；filter-bar 竖排 */
+      .tabs { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+      .tab { flex:0 0 auto; padding:9px 14px; font-size:14px; }
+      .filter-bar { flex-direction:column; }
+      .filter-bar select, .search-box input { font-size:14px; padding:10px; }
     }
       .todo-dot { background:#fed7d7;color:#c53030;font-size:11px;padding:1px 6px;border-radius:8px;margin-left:4px; }
     .board-summary { font-size:13px;color:#4a5568;margin-bottom:8px;padding:6px 10px;background:#fffaf0;border-radius:8px; }
@@ -599,9 +604,49 @@
     @media (max-width: 820px) {
       .container { flex-direction:column; }
       .sidebar { width:100%; min-height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; padding:10px; }
-      .sb-nav { flex-direction:row; flex:1; }
+      .sb-nav { flex-direction:row; flex:1; gap:8px; }
+      .sb-item { flex:1; padding:14px 18px; font-size:15px; text-align:center; border-left:none; }
       .sb-footer { flex-direction:row; border-top:none; border-left:1px solid rgba(255,255,255,0.12); padding-top:0; padding-left:12px; margin-top:0; margin-left:auto; }
       .appt-board { grid-template-columns:1fr; }
+      /* 手机端：待办动作按钮整宽大触控块 */
+      .todo-chk { flex-direction:column; gap:8px; }
+      .todo-chk .btn-mini, .todo-chk .btn-mini-blue, .todo-chk .btn-mini-green, .todo-chk .btn-mini-red, .todo-chk .btn-mini-gray { display:block; width:100%; box-sizing:border-box; padding:12px 8px; font-size:14px; margin:0; }
+      .todo-card { font-size:13px; }
+      .sb-mini { flex:1; padding:12px 8px; font-size:14px; }
+    }
+    /* ===== 扫码录入 tab（周医生 staff 视图，作用域限定 #page-scan / .scan-*）===== */
+    .scan-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+    .scan-controls input[type=date], .scan-controls select { flex:1; min-width:120px; padding:10px; border:1px solid #cbd5e0; border-radius:8px; font-size:14px; background:#fff; }
+    .scan-controls button { padding:10px 18px; background:#5a67d8; color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; }
+    .scan-hdinfo { font-size:13px; color:#718096; margin-left:auto; }
+    .scan-list .scan-status { text-align:center; padding:24px; color:#888; font-size:14px; }
+    .scan-list .section-title { display:flex; align-items:center; gap:8px; padding:14px 0 8px 4px; font-size:17px; font-weight:700; }
+    .scan-list .section-title .icon { font-size:20px; }
+    .scan-list .section-title.morning { color:#dd6b20; }
+    .scan-list .section-title.afternoon { color:#2b6cb0; }
+    .scan-list .section-title.other { color:#c53030; }
+    .scan-list .p-card { background:#fff; border-radius:12px; padding:14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+    .scan-list .p-no { width:28px; height:28px; background:#e8edf2; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:#666; flex-shrink:0; }
+    .scan-list .p-info { flex:1; min-width:0; }
+    .scan-list .p-name { font-size:16px; font-weight:600; color:#222; }
+    .scan-list .p-meta { font-size:12px; color:#888; margin-top:3px; }
+    .scan-list .p-meta span { margin-right:10px; }
+    .scan-list .p-note { font-size:12px; color:#dd6b20; margin-top:5px; line-height:1.4; word-break:break-all; }
+    .scan-list .p-slot { display:inline-block; padding:1px 7px; border-radius:8px; background:#eef2f7; color:#4a5568; font-size:11px; }
+    .scan-list .p-new { flex-shrink:0; align-self:flex-start; background:#e53e3e; color:#fff; font-size:11px; font-weight:600; padding:1px 7px; border-radius:8px; margin-right:2px; }
+    .scan-list .qr-wrap { flex-shrink:0; cursor:pointer; text-align:center; }
+    .scan-list .qr-wrap .qr { width:84px; height:84px; border-radius:6px; border:2px solid #e0e0e0; display:block; background:#fff; }
+    .scan-list .qr-wrap .qr-hint { font-size:10px; color:#999; margin-top:2px; }
+    .scan-tip { text-align:center; padding:16px 0 24px; color:#aaa; font-size:12px; }
+    .scan-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:5000; justify-content:center; align-items:center; flex-direction:column; cursor:pointer; }
+    .scan-overlay.show { display:flex; }
+    .scan-overlay .scan-qr-big { background:#fff; border-radius:12px; padding:10px; border:6px solid #fff; box-shadow:0 8px 32px rgba(0,0,0,0.4); pointer-events:none; }
+    .scan-overlay .scan-name-tag { color:#fff; font-size:18px; font-weight:600; margin-top:16px; pointer-events:none; }
+    .scan-overlay .scan-ov-hint { color:rgba(255,255,255,0.5); font-size:13px; margin-top:8px; pointer-events:none; }
+    @media (max-width:768px) {
+      .scan-controls { gap:6px; }
+      .scan-hdinfo { width:100%; margin-left:0; margin-top:4px; }
+      .scan-list .qr-wrap .qr { width:76px; height:76px; }
     }
 </style>
 </head>
@@ -625,10 +670,11 @@
       <nav class="sb-nav">
         <button class="sb-item active" data-board="todo" onclick="switchBoard('todo')">📋 待办看板</button>
         <button class="sb-item" data-board="appt" onclick="switchBoard('appt')">📅 预约看板</button>
-        <button class="sb-item" data-board="sched" onclick="switchBoard('sched')">⚙️ 排班看板</button>
+        <button class="sb-item" id="navSched" data-board="sched" onclick="switchBoard('sched')">⚙️ 排班看板</button>
+        <button class="sb-item" id="navScan" data-board="scan" onclick="switchBoard('scan')" style="display:none">📷 扫码录入</button>
       </nav>
       <div class="sb-footer">
-        <button class="sb-mini" onclick="exportData()">📤 导出备份</button>
+        <button class="sb-mini" id="navExport" onclick="exportData()">📤 导出备份</button>
         <button class="sb-mini" onclick="importData()">📥 导入恢复</button>
         <input type="file" id="importFile" style="display:none" accept=".json" onchange="handleImport(event)">
       </div>
@@ -640,7 +686,20 @@
             <button class="tab active" onclick="setTodoTab('today', this)">当日</button>
             <button class="tab" onclick="setTodoTab('week', this)">本周</button>
             <button class="tab" onclick="setTodoTab('all', this)">全部</button>
+            <button class="tab" onclick="setTodoTab('transit', this)">在途</button>
             <button class="tab" onclick="setTodoTab('done', this)">完成</button>
+          </div>
+          <div class="filter-bar">
+            <input id="todoSearch" class="search-box" type="text" placeholder="搜索姓名/卡号" oninput="renderTodoBoard()">
+            <select id="todoStage" onchange="renderTodoBoard()">
+              <option value="">全部阶段</option>
+              <option value="new">待检查/准备</option>
+              <option value="designed">方案/重启设计中</option>
+              <option value="communicated">方案沟通完成</option>
+              <option value="sent">加工件已送</option>
+              <option value="received">加工件已收</option>
+              <option value="bonded">已佩戴</option>
+            </select>
           </div>
         </div>
         <div id="todoBoardContent"></div>
@@ -693,7 +752,28 @@
           </div>
         </div>
       </div>
+      <div id="page-scan" class="board-page">
+        <div class="page-head"><h2>扫码录入</h2></div>
+        <div class="scan-controls">
+          <input type="date" id="scanSelDate" onchange="loadScan()">
+          <select id="scanSelLoc" onchange="loadScan()">
+            <option value="all">全部院区</option>
+            <option value="east">东部院区</option>
+            <option value="south">南部院区</option>
+          </select>
+          <button onclick="loadScan()">刷新</button>
+          <span class="scan-hdinfo" id="scanHdInfo">—</span>
+        </div>
+        <div class="scan-list" id="scanList"><div class="scan-status">加载中…</div></div>
+        <div class="scan-tip">点击二维码可放大扫描 · 数据实时同步预约系统</div>
+      </div>
     </div>
+  </div>
+  <!-- 扫码放大遮罩 -->
+  <div class="scan-overlay" id="scanOverlay" onclick="hideQRScan()">
+    <div class="scan-qr-big" id="scanOverlayQr"></div>
+    <div class="scan-name-tag" id="scanOverlayName"></div>
+    <div class="scan-ov-hint">点击任意位置关闭</div>
   </div>
 
   <!-- 批量排班弹窗 -->
@@ -824,10 +904,30 @@
   <script>
     // ===== Supabase 配置（后台经 Cloudflare 代理访问，service_role 密钥不进浏览器）=====
     const ADMIN_KEY = 'Haoyayi2026#';
+    // 周医生受限视图（admin.html?staff=1）：用独立 staff key，代理层只放行 GET + 受限 PATCH
+    const STAFF_KEY = 'ZhouStaff2026#ortho';
+    const IS_STAFF = new URLSearchParams(location.search).has('staff');
+    if (IS_STAFF) {
+      document.title = '周医生看板（只读）';
+      document.addEventListener('DOMContentLoaded', () => {
+        const navSched = document.getElementById('navSched'); if (navSched) navSched.style.display = 'none';
+        const pageSched = document.getElementById('page-sched'); if (pageSched) pageSched.style.display = 'none';
+        const navExport = document.getElementById('navExport'); if (navExport) navExport.style.display = 'none';
+        const navScan = document.getElementById('navScan'); if (navScan) navScan.style.display = '';
+        // 周医生口令门：把 ?k=口令 放进网址（添加到主屏的图标里），打开即自动进入、免手输
+        const k = new URLSearchParams(location.search).get('k');
+        if (k && (k === STAFF_KEY || k === ADMIN_KEY)) {
+          sessionStorage.setItem('ortho_admin_login', 'yes');
+          const ov = document.getElementById('loginOverlay'); if (ov) ov.style.display = 'none';
+        }
+        const h2 = document.querySelector('#loginOverlay h2'); if (h2) h2.textContent = '周医生看板登录';
+        const inp = document.getElementById('adminPassword'); if (inp) inp.placeholder = '请输入周医生口令';
+      });
+    }
     const API_BASE = 'https://duan-ortho.top'; // 后台统一走 Cloudflare 代理，GitHub 备用站也能用
     async function sbFetch(table, opts = {}) {
       const url = `${API_BASE}/api/sb/${table}${opts.query || ''}`;
-      const headers = { 'x-admin-key': ADMIN_KEY };
+      const headers = IS_STAFF ? { 'x-staff-key': STAFF_KEY } : { 'x-admin-key': ADMIN_KEY };
       if (opts.method === 'POST' || opts.method === 'PATCH' || opts.method === 'PUT') {
         headers['Content-Type'] = 'application/json';
         // upsert（on_conflict）需要 merge-duplicates 头，否则重复键会报错
@@ -1307,10 +1407,10 @@
             <div class="appt-meta">${dateStr} ${slotStr} · ${getLocationName(a.location)} ${a.location ? '<span style="color:#e53e3e">📍 ' + (LOCATION_ADDRESSES[a.location] || '') + '</span>' : ''}${eNote ? ' · ' + eNote : ''}</div>
           </div>
           <div class="appt-actions">
-            ${a.status === 'booked' ? `<button class="btn-mini-green" data-action="arrive">签到</button>` : ''}
-            ${a.status === 'arrived' ? `<button class="btn-mini-blue" data-action="done">完成</button>` : ''}
-            ${a.status !== 'cancel' && a.status !== 'done' ? `<button class="btn-mini-red" data-action="cancel">取消</button>` : ''}
-            <button class="btn-mini-gray" data-action="qr">二维码</button>
+            ${!IS_STAFF && a.status === 'booked' ? `<button class="btn-mini-green" data-action="arrive">签到</button>` : ''}
+            ${!IS_STAFF && a.status === 'arrived' ? `<button class="btn-mini-blue" data-action="done">完成</button>` : ''}
+            ${!IS_STAFF && a.status !== 'cancel' && a.status !== 'done' ? `<button class="btn-mini-red" data-action="cancel">取消</button>` : ''}
+            ${!IS_STAFF ? `<button class="btn-mini-gray" data-action="qr">二维码</button>` : ''}
           </div>
         </div>`;
       }).join('');
@@ -2231,7 +2331,8 @@
     })();
     function checkAdminLogin() {
       const pwd = document.getElementById('adminPassword').value;
-      if (pwd === ADMIN_KEY) {
+      const ok = IS_STAFF ? (pwd === STAFF_KEY || pwd === ADMIN_KEY) : (pwd === ADMIN_KEY);
+      if (ok) {
         sessionStorage.setItem('ortho_admin_login', 'yes');
         document.getElementById('loginOverlay').style.display = 'none';
       } else {
@@ -2268,6 +2369,37 @@
         await sbFetch('checklists', { method: 'PATCH', query: `?appointment_id=eq.${apptId}`, body: { appointment_id: null } });
       } catch(e) { console.warn('clear linked checklist failed', e); }
     }
+    // 通用：PATCH checklists 单列/多列并刷新看板
+    async function patchChecklistField(id, body) {
+      try {
+        const r = await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${id}`, body });
+        if (r === null) { showToast('同步失败', 'error'); return false; }
+        const cl = checklists.find(x => x.id === id);
+        if (cl) Object.assign(cl, body);
+        renderTodoBoard(); renderApptDayList();
+        return true;
+      } catch(e) { console.error(e); showToast('更新失败：' + e.message, 'error'); return false; }
+    }
+    // 统一阶段标识（供搜索/筛选/排序）
+    function stageOf(cl) {
+      if (cl.bonded) return 'bonded';
+      if (cl.checklist_type === 'new_patient') {
+        if (cl.workflow_stage === 'communicated') return 'communicated';
+        if (cl.workflow_stage === 'designed') return 'designed';
+        return 'new';
+      }
+      if (cl.checklist_type === 'broken') {
+        if (cl.received) return 'received';
+        if (cl.sent) return 'sent';
+        return 'new';
+      }
+      if (cl.checklist_type === 'restart') {
+        if (cl.received) return 'received';
+        if (cl.workflow_stage === 'designed') return 'designed';
+        return 'new';
+      }
+      return 'new';
+    }
 
     // ===== 待办看板：4 tabs（当日/本周/全部/完成）+ 三类型分组 =====
     function setTodoTab(tab, btn) {
@@ -2298,23 +2430,47 @@
             return `<span class="chk-tag ${cls}">${mark} ${escapeHtml(i.item_name)}</span>`;
           }).join('') + '</div>';
         }
+        const wf = cl.workflow_stage || '';
+        const proc = `<div class="todo-proc">
+          <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{workflow_stage:'designed'})">完成方案设计</button>
+          <button class="btn-mini ${wf==='communicated'?'btn-mini-green':'btn-mini-blue'}" onclick="patchChecklistField('${cl.id}',{workflow_stage:'communicated',status:'completed'})">方案沟通完成</button>
+          ${wf ? `<span class="chk-tag ${wf==='communicated'?'done':'todo'}">${wf==='communicated'?'已沟通':'已设计'}</span>` : ''}
+        </div>`;
         return `<div class="todo-item" data-clid="${cl.id}">
           <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
             ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}</div>
           <div class="todo-meta">${meta.join(' · ')}</div>
-          ${chkHtml}</div>`;
+          ${chkHtml}${proc}</div>`;
       }
 
-      // 矫治器破损/隐形重启：加工件送回/签收流程 + 标记已佩戴
-      const proc = [];
-      proc.push('加工件送回：' + (cl.sent ? '已送回' : '未送回'));
-      proc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
+      // 矫治器破损：送件/收件/佩戴
+      if (cl.checklist_type === 'broken') {
+        const proc = [];
+        proc.push('加工件送回：' + (cl.sent ? '已送回' : '未送回'));
+        proc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
+        return `<div class="todo-item" data-clid="${cl.id}">
+          <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
+            ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
+            <button class="btn-mini-green" onclick="markBonded('${cl.id}')">佩戴完成</button></div>
+          <div class="todo-meta">${meta.join(' · ')}</div>
+          <div class="todo-proc">${proc.join(' · ')}
+            <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{sent:true})">完成送件</button>
+            <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{received:true})">完成收件</button>
+          </div></div>`;
+      }
+      // 隐形重启：重启设计 + 收件 + 佩戴
+      const rproc = [];
+      rproc.push('重启设计：' + (cl.workflow_stage === 'designed' ? '已完成' : '未开始'));
+      rproc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
       return `<div class="todo-item" data-clid="${cl.id}">
         <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
           ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
-          <button class="btn-mini-green" onclick="markBonded('${cl.id}')">标记已佩戴</button></div>
+          <button class="btn-mini-green" onclick="markBonded('${cl.id}')">佩戴完成</button></div>
         <div class="todo-meta">${meta.join(' · ')}</div>
-        <div class="todo-proc">${proc.join(' · ')}</div></div>`;
+        <div class="todo-proc">${rproc.join(' · ')}
+          <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{workflow_stage:'designed'})">完成重启设计</button>
+          <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{received:true})">完成收件</button>
+        </div></div>`;
     }
     function renderTodoBoard() {
       const el = document.getElementById('todoBoardContent');
@@ -2326,10 +2482,15 @@
       let list;
       let isDone = false;
       if (todoTab === 'done') {
-        list = checklists.filter(cl => cl.bonded && cl.status !== 'cancel');
+        // 完成栏：已佩戴矫治器 或 初诊"方案沟通完成"(status=completed) 都算完成
+        list = checklists.filter(cl => (cl.bonded || cl.status === 'completed') && cl.status !== 'cancel');
         isDone = true;
+      } else if (todoTab === 'transit') {
+        // 加工件在途看板：已送件未签收
+        list = checklists.filter(cl => cl.sent && !cl.received && cl.status !== 'cancel');
       } else {
-        list = checklists.filter(cl => !cl.bonded && cl.status !== 'cancel');
+        // 待办栏：未佩戴 且 未完成（初诊沟通完成后不再出现在待办）
+        list = checklists.filter(cl => !cl.bonded && cl.status !== 'completed' && cl.status !== 'cancel');
         if (todoTab === 'today') {
           list = list.filter(cl => (cl.created_at || '').slice(0,10) === todayStr);
         } else if (todoTab === 'week') {
@@ -2339,16 +2500,30 @@
           });
         }
       }
+      // 姓名/卡号搜索 + 阶段筛选
+      const q = (document.getElementById('todoSearch') && document.getElementById('todoSearch').value || '').trim().toLowerCase();
+      const st = (document.getElementById('todoStage') && document.getElementById('todoStage').value || '');
+      if (q || st) {
+        list = list.filter(cl => {
+          if (q) {
+            const hay = ((cl.patient_name || '') + ' ' + (cl.patient_card || '')).toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          if (st && stageOf(cl) !== st) return false;
+          return true;
+        });
+      }
       if (list.length === 0) {
-        el.innerHTML = isDone ? '<div class="empty-state">暂无已完成登记</div>'
-                              : '<div class="empty-state">暂无待办登记</div>';
+        const emptyMsg = todoTab === 'transit' ? '暂无在途加工件'
+                       : isDone ? '暂无已完成登记' : '暂无待办登记';
+        el.innerHTML = '<div class="empty-state">' + emptyMsg + '</div>';
         return;
       }
       // 按三类型分组
       let html = '';
       if (isDone) {
         // 完成栏：按时间排序，不分类型
-        html += '<div class="todo-group"><div class="todo-group-header">已完成（已佩戴矫治器）</div>';
+        html += '<div class="todo-group"><div class="todo-group-header">已完成</div>';
         html += list.slice().sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')).map(todoCardHtml).join('');
         html += '</div>';
       } else {
@@ -2466,6 +2641,67 @@
       el.innerHTML = html;
     }
 
+    // ===== 扫码录入 tab（合并自 scan_entry.html，统一走 sbFetch → staff key）=====
+    const SCAN_LOC_MAP = { all: '全部院区', east: '东部院区', south: '南部院区' };
+    const SCAN_WEEKDAY = ['周日','周一','周二','周三','周四','周五','周六'];
+    function scanTodayStr() { const d = new Date(); const p = n => String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+    function escScan(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function makeQRScan(container, text, size){ container.innerHTML=''; new QRCode(container, { text:text, width:size, height:size, colorDark:'#000000', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.M }); }
+    let scanLoaded = false;
+    async function loadScan(){
+      const dateEl = document.getElementById('scanSelDate');
+      if (!dateEl) return;
+      const date = dateEl.value || scanTodayStr();
+      dateEl.value = date;
+      const loc = document.getElementById('scanSelLoc').value;
+      const dt = new Date(date + 'T00:00:00');
+      const wd = SCAN_WEEKDAY[dt.getDay()];
+      document.getElementById('scanList').innerHTML = '<div class="scan-status">加载中…</div>';
+      try {
+        const q = '?select=patient_name,patient_card,slot,location,age,patient_age,note,created_at'
+                + '&date=eq.' + encodeURIComponent(date) + '&status=eq.booked&order=created_at.desc';
+        let data = await sbFetch('appointments', { query: q });
+        if (loc !== 'all') data = data.filter(r => r.location === loc);
+        document.getElementById('scanHdInfo').textContent = date + ' ' + wd + ' · ' + (SCAN_LOC_MAP[loc]||loc) + ' · 共 ' + data.length + ' 人';
+        renderScan(data);
+      } catch (e) {
+        document.getElementById('scanList').innerHTML = '<div class="scan-status">加载失败：' + escScan(e.message) + '<br>请检查网络或稍后刷新</div>';
+      }
+    }
+    function renderScan(records){
+      const list = document.getElementById('scanList');
+      if (!records.length){ list.innerHTML = '<div class="scan-status">暂无人预约</div>'; return; }
+      const sorted = records.slice().sort((a,b)=> String(b.created_at||'').localeCompare(String(a.created_at||'')));
+      list.innerHTML = '<div class="section-title"><span class="icon">📋</span> 共 '+sorted.length+' 人 · 最新置顶</div>'
+                     + sorted.map((r,i)=>scanCardHtml(r, i+1)).join('');
+      list.querySelectorAll('.qr-wrap').forEach(w => makeQRScan(w.querySelector('.qr'), w.dataset.card, 84));
+    }
+    function scanCardHtml(r, idx){
+      const name = escScan(r.patient_name || '');
+      const card = escScan(r.patient_card || '');
+      const age = r.age || r.patient_age || '';
+      const ageStr = age ? age+'岁' : '';
+      const slotLabel = r.slot==='am' ? '上午' : (r.slot==='pm' ? '下午' : '未分时段');
+      const isNew = r.created_at && (Date.now() - new Date(r.created_at).getTime() <= 48*3600*1000);
+      const newTag = isNew ? '<span class="p-new">新</span>' : '';
+      const note = r.note ? '<div class="p-note">📝 '+escScan(r.note)+'</div>' : '';
+      const meta = (card?'<span>卡号 '+card+'</span>':'') + (ageStr?'<span>'+ageStr+'</span>':'') + '<span class="p-slot">'+slotLabel+'</span>';
+      return '<div class="p-card">'+newTag+'<div class="p-no">'+idx+'</div>'
+           + '<div class="p-info"><div class="p-name">'+name+'</div><div class="p-meta">'+meta+'</div>'+note+'</div>'
+           + '<div class="qr-wrap" data-card="'+card+'" data-name="'+name+'" onclick="zoomQRScan(this)">'
+           + '<div class="qr"></div><div class="qr-hint">点击放大</div></div></div>';
+    }
+    function zoomQRScan(el){
+      makeQRScan(document.getElementById('scanOverlayQr'), el.dataset.card, 280);
+      document.getElementById('scanOverlayName').textContent = el.dataset.name + ' · ' + el.dataset.card;
+      document.getElementById('scanOverlay').classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function hideQRScan(){
+      document.getElementById('scanOverlay').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
     function switchBoard(name) {
       document.querySelectorAll('.board-page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.sb-item').forEach(b => b.classList.remove('active'));
@@ -2476,6 +2712,7 @@
       if (name === 'appt') { renderApptCalendar(); renderApptDayList(); }
       else if (name === 'sched') { renderCalendar(); renderRuleList(); }
       else if (name === 'todo') { renderTodoBoard(); }
+      else if (name === 'scan') { const d = document.getElementById('scanSelDate'); if (d && !d.value) d.value = scanTodayStr(); loadScan(); }
     }
     // ===== 初始化 =====
     (async () => {
