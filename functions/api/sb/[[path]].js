@@ -111,12 +111,13 @@ export async function onRequest(context) {
     } else {
       // POST / PUT / DELETE 一律拒绝
       return new Response(
-        JSON.stringify({ error: 'Staff key only allows GET and PATCH' }),
-        { status: 405, headers: { ...CORS, 'Content-Type': 'application/json' } }
-      );
+          JSON.stringify({ error: 'Staff key only allows GET and PATCH' }),
+          { status: 405, headers: { ...CORS, 'Content-Type': 'application/json' } }
+        );
+      }
+      // 白名单表的 GET 不在此处 return，落到下方 admin 转发逻辑（service_role 只读转发）。
+      // staff 写能力仍由上面 PATCH 字段白名单 + POST/PUT/DELETE 一律 405 兜底。
     }
-    return;
-  }
 
   // 4) admin 分支：原逻辑不变（全方法、service_role 转发）
   const url = new URL(request.url);
