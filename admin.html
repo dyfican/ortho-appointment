@@ -2479,9 +2479,19 @@
       const pad = n => String(n).padStart(2,'0');
       const localDateStr = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
       const todayStr = localDateStr(now);
-      // 近7天 = 今天及往前6天（按预约日期 appointment_date 筛，用本地日期避免 UTC 错位）
+      // 近7天 = 今天及往前6天
       const day7 = new Date(now); day7.setDate(now.getDate() - 6);
       const day7Str = localDateStr(day7);
+      // 有效日期：优先预约日期 appointment_date；缺失（老登记/扫码未关联预约）时回退到登记创建时间 created_at，避免 tab 恒空
+      const effDate = (cl) => {
+        const ad = (cl.appointment_date || '').slice(0,10);
+        if (ad) return ad;
+        if (cl.created_at) {
+          const dt = new Date(cl.created_at);
+          if (!isNaN(dt.getTime())) return localDateStr(dt);
+        }
+        return '';
+      };
       let list;
       let isDone = false;
       if (todoTab === 'done') {
@@ -2495,12 +2505,12 @@
         // 待办栏：未佩戴 且 未完成（初诊沟通完成后不再出现在待办）
         list = checklists.filter(cl => !cl.bonded && cl.status !== 'completed' && cl.status !== 'cancel');
         if (todoTab === 'today') {
-          // 当日：按预约日期 appointment_date == 今天（修正此前误用 created_at 的 bug）
-          list = list.filter(cl => (cl.appointment_date || '').slice(0,10) === todayStr);
+          // 当日：按有效日期 == 今天（优先 appointment_date，缺失回退 created_at）
+          list = list.filter(cl => effDate(cl) === todayStr);
         } else if (todoTab === 'week') {
-          // 近7天：按预约日期 appointment_date 落在 [今天-6天, 今天]
+          // 近7天：按有效日期 落在 [今天-6天, 今天]
           list = list.filter(cl => {
-            const d = (cl.appointment_date || '').slice(0,10);
+            const d = effDate(cl);
             return d >= day7Str && d <= todayStr;
           });
         }
@@ -2676,9 +2686,28 @@
     function renderScan(records){
       const list = document.getElementById('scanList');
       if (!records.length){ list.innerHTML = '<div class="scan-status">暂无人预约</div>'; return; }
-      const sorted = records.slice().sort((a,b)=> String(b.created_at||'').localeCompare(String(a.created_at||'')));
-      list.innerHTML = '<div class="section-title"><span class="icon">📋</span> 共 '+sorted.length+' 人 · 最新置顶</div>'
-                     + sorted.map((r,i)=>scanCardHtml(r, i+1)).join('');
+      // 按上下午分组，方便查看与选择
+      const buckets = { am: [], pm: [], none: [] };
+      records.forEach(r => {
+        if (r.slot === 'am') buckets.am.push(r);
+        else if (r.slot === 'pm') buckets.pm.push(r);
+        else buckets.none.push(r);
+      });
+      const sortNew = arr => arr.slice().sort((a,b)=> String(b.created_at||'').localeCompare(String(a.created_at||'')));
+      const sections = [
+        { title: '☀️ 上午',   items: sortNew(buckets.am) },
+        { title: '🌤 下午',   items: sortNew(buckets.pm) },
+        { title: '🕓 未分时段', items: sortNew(buckets.none) },
+      ].filter(s => s.items.length);
+      let html = '';
+      let idx = 0;
+      sections.forEach(s => {
+        html += '<div class="scan-section" style="margin-bottom:16px">'
+              + '<div class="section-title"><span class="icon">'+s.title+'</span> '+s.items.length+' 人 · 最新置顶</div>'
+              + s.items.map(r => scanCardHtml(r, ++idx)).join('')
+              + '</div>';
+      });
+      list.innerHTML = html;
       list.querySelectorAll('.qr-wrap').forEach(w => makeQRScan(w.querySelector('.qr'), w.dataset.card, 84));
     }
     function scanCardHtml(r, idx){
