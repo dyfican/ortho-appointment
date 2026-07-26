@@ -684,7 +684,7 @@
         <div class="page-head"><h2>待办看板</h2>
           <div class="tabs">
             <button class="tab active" onclick="setTodoTab('today', this)">当日</button>
-            <button class="tab" onclick="setTodoTab('week', this)">本周</button>
+            <button class="tab" onclick="setTodoTab('week', this)">近7天</button>
             <button class="tab" onclick="setTodoTab('all', this)">全部</button>
             <button class="tab" onclick="setTodoTab('transit', this)">在途</button>
             <button class="tab" onclick="setTodoTab('done', this)">完成</button>
@@ -2401,7 +2401,7 @@
       return 'new';
     }
 
-    // ===== 待办看板：4 tabs（当日/本周/全部/完成）+ 三类型分组 =====
+    // ===== 待办看板：5 tabs（当日/近7天/全部/在途/完成）+ 三类型分组 =====
     function setTodoTab(tab, btn) {
       todoTab = tab;
       document.querySelectorAll('#page-todo .tabs .tab').forEach(t => t.classList.remove('active'));
@@ -2476,9 +2476,12 @@
       const el = document.getElementById('todoBoardContent');
       if (!el) return;
       const now = new Date();
-      const todayStr = now.toISOString().slice(0,10);
-      const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
-      const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
+      const pad = n => String(n).padStart(2,'0');
+      const localDateStr = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+      const todayStr = localDateStr(now);
+      // 近7天 = 今天及往前6天（按预约日期 appointment_date 筛，用本地日期避免 UTC 错位）
+      const day7 = new Date(now); day7.setDate(now.getDate() - 6);
+      const day7Str = localDateStr(day7);
       let list;
       let isDone = false;
       if (todoTab === 'done') {
@@ -2492,11 +2495,13 @@
         // 待办栏：未佩戴 且 未完成（初诊沟通完成后不再出现在待办）
         list = checklists.filter(cl => !cl.bonded && cl.status !== 'completed' && cl.status !== 'cancel');
         if (todoTab === 'today') {
-          list = list.filter(cl => (cl.created_at || '').slice(0,10) === todayStr);
+          // 当日：按预约日期 appointment_date == 今天（修正此前误用 created_at 的 bug）
+          list = list.filter(cl => (cl.appointment_date || '').slice(0,10) === todayStr);
         } else if (todoTab === 'week') {
+          // 近7天：按预约日期 appointment_date 落在 [今天-6天, 今天]
           list = list.filter(cl => {
-            const c = cl.created_at ? new Date(cl.created_at) : null;
-            return c && c >= weekStart && c < weekEnd;
+            const d = (cl.appointment_date || '').slice(0,10);
+            return d >= day7Str && d <= todayStr;
           });
         }
       }
