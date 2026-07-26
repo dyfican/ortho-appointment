@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="cache-control" content="no-store">
   <meta http-equiv="pragma" content="no-cache">
   <title>段医生正畸门诊预约</title>
@@ -444,8 +444,14 @@
     .chk-item .ci-loc { font-size:12px; color:#3182ce; margin-top:2px; }
     .chk-item.done .ci-name { text-decoration:line-through; color:#a0aec0; }
     .chk-item .ci-skip { font-size:12px; color:#718096; margin-left:8px; cursor:pointer; white-space:nowrap; }
-  </style>
-</head>
+    </style>
+    <link rel="manifest" href="manifest-patient.webmanifest">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="theme-color" content="#c53030">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="正畸预约">
+  </head>
 <body>
   <div class="container">
     <div class="top-row">
@@ -533,7 +539,7 @@
           </div>
           <div style="font-size:11px;color:#718096;margin-top:4px;">默认=本次预约院区，可手动改（同步至医生端）</div>
         </div>
-        <button class="btn-primary" onclick="submitBooking()">确认预约</button>
+        <button class="btn-primary" id="submitBtn" onclick="submitBooking()">确认预约</button>
       </div>
     </div>
 
@@ -768,6 +774,8 @@
     }
 
     // ===== 保存预约到 Supabase =====
+    // 返回三态：{status:'cloud'|'local', id, error}
+    // cloud = 已成功写入 Supabase；local = 网络/接口异常，仅落本机 localStorage（离线兜底）
     async function saveAppointmentToDB(appt) {
       try {
         const result = await sbFetch('appointments', {
@@ -796,9 +804,11 @@
         }
         const idx = appointments.findIndex(a => a.createdAt === appt.createdAt && a.name === appt.name);
         if (idx >= 0) appointments[idx].id = appt.id;
+        return { status: 'cloud', id: appt.id };
       } catch(e) {
         console.error('Save to Supabase failed, saving locally', e);
         localStorage.setItem(STORAGE_KEYS.appointments, JSON.stringify(appointments));
+        return { status: 'local', id: appt.id, error: e };
       }
     }
 
@@ -1099,47 +1109,54 @@
 
     // ===== 提交预约 =====
     async function submitBooking() {
+      const btn = document.getElementById('submitBtn');
+      const name = document.getElementById('patientName').value.trim();
+      const card = normalizeCard(document.getElementById('patientCard').value);
+      const note = document.getElementById('patientNote').value.trim();
+      const isReturn = document.getElementById('isReturnVisit').checked;
+      const age = parseInt(document.getElementById('patientAge').value);
+
+      if (!name) { showToast('请输入患者姓名', 'error'); return; }
+      if (!card) { showToast('请输入就诊卡号', 'error'); return; }
+      if (!isValidCard(card)) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
+      if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
+      if (!selectedDate || !selectedSlot) { showToast('请先选择日期和时段', 'error'); return; }
+
+      // 日期范围校验（今天起 2 个月内）
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const twoMonthsLater = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
+      if (selectedDate < today) { showToast('不能预约过去的日期', 'error'); return; }
+      if (selectedDate > twoMonthsLater) { showToast('只能预约2个月内的日期', 'error'); return; }
+
+      const ds = getDaySchedule(selectedDate);
+      const cfg = ds[selectedSlot];
+      if (!cfg.enabled) { showToast('该时段已停诊', 'error'); return; }
+      if (!isSlotBookable(selectedDate, selectedSlot)) { showToast('已超过今日17:00，不可预约明天上午', 'error'); return; }
+      if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
+
+      // 防重复预约：离线时跳过校验（容错，不阻断提交）
+      const dateStr = formatDate(selectedDate);
       try {
-        const name = document.getElementById('patientName').value.trim();
-        const card = normalizeCard(document.getElementById('patientCard').value);
-        const note = document.getElementById('patientNote').value.trim();
-        const isReturn = document.getElementById('isReturnVisit').checked;
-        const age = parseInt(document.getElementById('patientAge').value);
-
-        if (!name) { showToast('请输入患者姓名', 'error'); return; }
-        if (!card) { showToast('请输入就诊卡号', 'error'); return; }
-        if (!isValidCard(card)) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
-        if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
-        if (!selectedDate || !selectedSlot) { showToast('请先选择日期和时段', 'error'); return; }
-
-        // 日期范围校验（今天起 2 个月内）
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const twoMonthsLater = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
-        if (selectedDate < today) { showToast('不能预约过去的日期', 'error'); return; }
-        if (selectedDate > twoMonthsLater) { showToast('只能预约2个月内的日期', 'error'); return; }
-
-        const ds = getDaySchedule(selectedDate);
-        const cfg = ds[selectedSlot];
-        if (!cfg.enabled) { showToast('该时段已停诊', 'error'); return; }
-        if (!isSlotBookable(selectedDate, selectedSlot)) { showToast('已超过今日17:00，不可预约明天上午', 'error'); return; }
-        if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
-
-        // 防重复预约：调 RPC 检查（RLS 已禁止前端直接读 appointments）
-        const dateStr = formatDate(selectedDate);
         const isDup = await sbRpc('check_duplicate_booking', { p_card: card, p_date: dateStr, p_slot: selectedSlot });
         if (isDup) { showToast('您已预约了该日期及时段，请勿重复预约', 'error'); return; }
+      } catch(e) { console.warn('重复校验跳过(可能离线)', e); }
 
-        // 周六预约频次限制（按年龄比例，仅南部院区）
-        if (selectedDate.getDay() === 6 && cfg.location === 'south') {
+      // 周六预约频次限制（按年龄比例，仅南部院区）
+      if (selectedDate.getDay() === 6 && cfg.location === 'south') {
+        try {
           const r = await canBookSaturday(card, age);
           if (!r.allowed) {
             const ruleTxt = r.N === 2 ? '每2次预约最多1次周六' : '每3次预约最多1次周六';
             showToast(`该年龄段${ruleTxt}（南部院区），您已预约 ${r.T} 次（其中周六 ${r.S} 次），暂不可再预约南部周六`, 'error');
             return;
           }
-        }
+        } catch(e) { console.warn('周六频次校验跳过(可能离线)', e); }
+      }
 
+      // 进入提交：禁用按钮防连点
+      btn.disabled = true; btn.classList.add('btn-loading'); btn.textContent = '提交中…';
+      try {
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2,5),
           name, card, note, isReturn, age,
@@ -1149,10 +1166,25 @@
           status: 'booked',
           createdAt: new Date().toISOString()
         };
+        // 乐观更新：先入本地列表，界面即时响应
         appointments.push(appt);
         slotCountMap[`${appt.date}_${appt.slot}`] = (slotCountMap[`${appt.date}_${appt.slot}`] || 0) + 1;
-        await saveAppointmentToDB(appt);
-        // 登记关联：若本次有未完成的 checklist，回填真实预约 id
+
+        const saveResult = await saveAppointmentToDB(appt);
+        if (saveResult.status === 'local') {
+          // 网络/接口异常：仅存本机，如实提示，不假成功
+          pendingLocalAppt = appt;
+          showToast('网络异常，已暂存本机，联网后自动同步', 'warn');
+          showSuccessModal(appt, true);
+          renderCalendar();
+          document.getElementById('patientNote').value = '';
+          document.getElementById('bookingForm').style.display = 'none';
+          document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
+          selectedSlot = null;
+          return;
+        }
+
+        // 云成功：登记关联
         const cid = localStorage.getItem(STORAGE_CHECKLIST);
         if (cid && appt.id) {
           try {
@@ -1167,7 +1199,8 @@
         saveLastPatient(name, card, isReturn, age);
         setAgeForCard(card, age);
 
-        showSuccessModal(appt);
+        pendingLocalAppt = null;
+        showSuccessModal(appt, false);
         renderCalendar();
 
         // 重置表单
@@ -1178,15 +1211,24 @@
       } catch (err) {
         console.error(err);
         showToast('预约出错：' + err.message, 'error');
+      } finally {
+        // 无论成功/失败/本机暂存，恢复按钮
+        btn.disabled = false; btn.classList.remove('btn-loading'); btn.textContent = '确认预约';
       }
     }
 
-    function showSuccessModal(appt) {
+    function showSuccessModal(appt, isLocal) {
       const date = new Date(appt.date);
       const dateStr = formatDate(date);
       const slotStr = appt.slot === 'am' ? '上午' : '下午';
 
+      const localNote = isLocal
+        ? `<p style="color:#dd6b20;background:#fffaf0;padding:8px 10px;border-radius:8px;margin:6px 0;font-size:13px;">⚠️ 当前网络异常，预约已暂存本机，联网后将自动同步到医生端。凭证号待同步后生成。</p>`
+        : '';
+
       document.getElementById('voucherContent').innerHTML = `
+        ${localNote}
+        ${isLocal ? '<div style="margin-top:10px;"><button class="btn-primary" style="width:100%;padding:12px;font-size:15px;" onclick="retryLastLocal()">🔄 重试同步到云端</button></div>' : ''}
         <p><strong>患者：</strong>${escapeHtml(appt.name)} ${appt.isReturn?'(复诊)':'(初诊)'}</p>
         <p><strong>卡号：</strong>${escapeHtml(appt.card)}</p>
         <p><strong>年龄：</strong>${escapeHtml(appt.age)||'—'}岁</p>
@@ -1198,7 +1240,26 @@
       `;
 
       document.getElementById('successModal').classList.add('active');
-      showToast('预约成功！' + appt.name + ' ' + dateStr + ' ' + slotStr);
+      showToast(isLocal ? ('已暂存本机：' + appt.name + ' ' + dateStr + ' ' + slotStr) : ('预约成功！' + appt.name + ' ' + dateStr + ' ' + slotStr));
+    }
+
+    let pendingLocalAppt = null;
+    function retryLastLocal() {
+      if (!pendingLocalAppt) { showToast('没有待同步的预约', 'warn'); return; }
+      const appt = pendingLocalAppt;
+      showToast('正在重试同步…', 'info');
+      saveAppointmentToDB(appt).then(function(res) {
+        if (res.status === 'cloud') {
+          pendingLocalAppt = null;
+          showSuccessModal(appt, false);
+          renderCalendar();
+          showToast('已成功同步到云端', 'success');
+        } else {
+          showToast('仍同步失败，请稍后再试', 'error');
+        }
+      }).catch(function(e) {
+        showToast('同步出错：' + (e && e.message ? e.message : e), 'error');
+      });
     }
 
     function showToast(msg, type) {
@@ -1494,6 +1555,13 @@
       await loadTemplates();
       renderCalendar();
     })();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('SW 注册失败', e); });
+      });
+    }
   </script>
 </body>
 </html>

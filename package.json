@@ -1,0 +1,12 @@
+{
+  "name": "ortho-appointment-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "段医生正畸预约系统 回归自验脚本（playwright）",
+  "scripts": {
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
