@@ -559,6 +559,10 @@
       .todo-type.new_patient { background:#f0fff4;color:#276749; }
       .todo-type.broken { background:#fff5f5;color:#c53030; }
       .todo-type.restart { background:#ebf8ff;color:#2b6cb0; }
+      .btn-saving { opacity:.55; cursor:not-allowed; filter:grayscale(.3); }
+      .todo-chk-collapse { margin-top:6px; }
+      .chk-toggle { background:#edf2f7; color:#2d3748; border:1px solid #cbd5e0; border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer; }
+      .chk-toggle:hover { background:#e2e8f0; }
     .board-summary { font-size:13px;color:#4a5568;margin-bottom:8px;padding:6px 10px;background:#fffaf0;border-radius:8px; }
     .board-summary b { color:#c53030; }
     .todo-item { background:#f7fafc;border-left:3px solid #c53030;border-radius:10px;padding:10px 12px;margin-bottom:8px; }
@@ -694,7 +698,7 @@
             <button class="tab" onclick="setTodoTab('done', this)">完成</button>
           </div>
           <div class="filter-bar">
-            <input id="todoSearch" class="search-box" type="text" placeholder="搜索姓名/卡号" oninput="renderTodoBoard()">
+            <input id="todoSearch" class="search-box" type="text" placeholder="搜索姓名/卡号" oninput="onTodoSearch()">
             <select id="todoStage" onchange="renderTodoBoard()">
               <option value="">全部阶段</option>
               <option value="new">待检查/准备</option>
@@ -2251,6 +2255,7 @@
           });
         }
       } catch(e) { console.warn('Supabase schedule overrides load failed', e); }
+      startAutoSync();   // 启动后台静默同步（轮1-P2a）
     }
 
     // ===== 导出导入 =====
@@ -2369,31 +2374,140 @@
     let todoTab = 'today';
     let apptCalDate = null;
 
+    // ===== 交互优化：乐观更新 + 局部刷新 + 后台静默同步（轮1） =====
+    const savingIds = new Set();
+    let todoSearchTimer = null;
+    let autoSyncTimer = null;
+    function isApptVisible() {
+      const p = document.getElementById('page-appt');
+      return !!(p && p.classList.contains('active'));
+    }
+    function refreshCard(id) {
+      const cl = checklists.find(x => x.id === id);
+      const node = document.querySelector('[data-clid="' + id + '"]');
+      if (!cl || !node) { renderTodoBoard(); return; }
+      node.outerHTML = todoCardHtml(cl);
+    }
+    function actBtn(clId, baseCls, label, bodyObj) {
+      const saving = savingIds.has(clId);
+      const cls = saving ? baseCls + ' btn-saving' : baseCls;
+      const dis = saving ? ' disabled' : '';
+      const bodyStr = JSON.stringify(bodyObj).replace(/"/g, "'");
+      return '<button class="' + cls + '"' + dis + ' onclick="patchChecklistField(\'' + clId + '\',' + bodyStr + ')">' + label + (saving ? ' \u00b7\u4fdd\u5b58\u4e2d' : '') + '</button>';
+    }
+    function markBtn(clId, label) {
+      const saving = savingIds.has(clId);
+      const cls = saving ? 'btn-mini-green btn-saving' : 'btn-mini-green';
+      const dis = saving ? ' disabled' : '';
+      return '<button class="' + cls + '"' + dis + ' onclick="markBonded(\'' + clId + '\')">' + label + (saving ? ' \u00b7\u4fdd\u5b58\u4e2d' : '') + '</button>';
+    }
+    function toggleChk(id, btn) {
+      const box = document.getElementById('chk-' + id);
+      if (!box) return;
+      const open = box.style.display !== 'none';
+      box.style.display = open ? 'none' : 'block';
+      if (btn) btn.textContent = open ? '\u68c0\u67e5\u9879\uff08' + box.children.length + '\uff09\u25b8' : '\u6536\u8d77\u68c0\u67e5\u9879\u25be';
+    }
+    function onTodoSearch() {
+      if (todoSearchTimer) clearTimeout(todoSearchTimer);
+      todoSearchTimer = setTimeout(() => renderTodoBoard(), 200);
+    }
+    function startAutoSync() {
+      if (autoSyncTimer) return;
+      autoSyncTimer = setInterval(async () => {
+        if (document.hidden) return;
+        try {
+          const sbCl = await sbFetch('checklists', { query: '?select=*&order=created_at.desc' });
+          if (!sbCl) return;
+          mergeChecklists(sbCl);
+        } catch(e) { /* silent */ }
+      }, 30000);
+    }
+    function mergeChecklists(rows) {
+      const incoming = new Map();
+      rows.forEach(r => incoming.set(r.id, r));
+      const changed = [];
+      for (const r of rows) {
+        if (savingIds.has(r.id)) continue;
+        const norm = {
+          id: r.id, patient_name: r.patient_name, patient_card: r.patient_card,
+          patient_age: r.patient_age, checklist_type: r.checklist_type, campus: r.campus,
+          return_campus: r.return_campus, appointment_id: r.appointment_id,
+          appointment_date: r.appointment_date, appointment_slot: r.appointment_slot,
+          sent: r.sent, received: r.received, bonded: r.bonded,
+          status: r.status, created_at: r.created_at, completed_at: r.completed_at
+        };
+        const exist = checklists.find(x => x.id === r.id);
+        if (!exist) { checklists.push(norm); changed.push(r.id); }
+        else {
+          const before = JSON.stringify(exist);
+          Object.assign(exist, norm);
+          if (JSON.stringify(exist) !== before) changed.push(r.id);
+        }
+      }
+      const beforeIds = checklists.map(x => x.id);
+      checklists = checklists.filter(x => incoming.has(x.id));
+      const removed = beforeIds.filter(id => !incoming.has(id));
+      if (removed.length) { renderTodoBoard(); if (isApptVisible()) renderApptDayList(); return; }
+      if (changed.length === 0) return;
+      if (document.getElementById('page-todo').classList.contains('active')) {
+        changed.forEach(id => refreshCard(id));
+      } else if (isApptVisible()) {
+        renderApptDayList();
+      }
+    }
+
     async function markBonded(id) {
+      const cl = checklists.find(x => x.id === id);
+      if (!cl) return;
+      if (savingIds.has(id)) return;
+      const prevBonded = cl.bonded;
+      cl.bonded = true;                 // 乐观更新
+      savingIds.add(id);
+      refreshCard(id);                  // 即时反馈
       try {
         const r = await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${id}`, body: { bonded: true } });
-        if (r === null) { showToast('同步失败', 'error'); return; }
-        const cl = checklists.find(x => x.id === id);
-        if (cl) cl.bonded = true;
+        if (r === null) throw new Error('同步失败');
         showToast('已标记为佩戴矫治器');
-        renderTodoBoard(); renderApptDayList();
-      } catch(e) { console.error(e); showToast('标记失败：' + e.message, 'error'); }
+      } catch(e) {
+        cl.bonded = prevBonded;         // 回滚
+        showToast('标记失败：' + (e && e.message ? e.message : '网络错误'), 'error');
+      } finally {
+        savingIds.delete(id);
+        renderTodoBoard();              // bonded 改变 tab 归属 → 整板重排
+        if (isApptVisible()) renderApptDayList();
+      }
     }
     async function clearLinkedChecklist(apptId) {
       try {
         await sbFetch('checklists', { method: 'PATCH', query: `?appointment_id=eq.${apptId}`, body: { appointment_id: null } });
       } catch(e) { console.warn('clear linked checklist failed', e); }
     }
-    // 通用：PATCH checklists 单列/多列并刷新看板
+    // 通用：PATCH checklists 单列/多列（乐观更新 + 局部刷新 + 失败回滚）
     async function patchChecklistField(id, body) {
+      const cl = checklists.find(x => x.id === id);
+      if (!cl) return false;
+      if (savingIds.has(id)) return false;        // 防狂点
+      const prev = {};
+      for (const k in body) prev[k] = cl[k];
+      Object.assign(cl, body);                     // 乐观更新
+      savingIds.add(id);
+      refreshCard(id);                             // 即时局部反馈（按钮变"保存中"）
       try {
         const r = await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${id}`, body });
-        if (r === null) { showToast('同步失败', 'error'); return false; }
-        const cl = checklists.find(x => x.id === id);
-        if (cl) Object.assign(cl, body);
-        renderTodoBoard(); renderApptDayList();
+        if (r === null) throw new Error('同步失败');
         return true;
-      } catch(e) { console.error(e); showToast('更新失败：' + e.message, 'error'); return false; }
+      } catch(e) {
+        Object.assign(cl, prev);                   // 回滚
+        showToast('更新失败：' + (e && e.message ? e.message : '网络错误'), 'error');
+        return false;
+      } finally {
+        savingIds.delete(id);
+        // status/workflow_stage/bonded 改变 tab 归属 → 整板重排；否则只局部刷新该卡片
+        const moves = ['status','workflow_stage','bonded'].some(k => k in body);
+        if (moves) renderTodoBoard(); else refreshCard(id);
+        if (isApptVisible()) renderApptDayList();
+      }
     }
     // 统一阶段标识（供搜索/筛选/排序）
     function stageOf(cl) {
@@ -2439,16 +2553,21 @@
         if (items.length === 0) {
           chkHtml = '<div class="todo-chk">暂无检查项</div>';
         } else {
-          chkHtml = '<div class="todo-chk">' + items.map(i => {
+          const itemsHtml = items.map(i => {
             const cls = i.completed ? 'done' : (i.skipped ? 'skip' : 'todo');
             const mark = i.completed ? '✓' : (i.skipped ? '⊘' : '✗');
             return `<span class="chk-tag ${cls}">${mark} ${escapeHtml(i.item_name)}</span>`;
-          }).join('') + '</div>';
+          }).join('');
+          // 默认折叠，点"检查项(N)"展开，减少首屏 DOM
+          chkHtml = '<div class="todo-chk-collapse">'
+            + '<button class="chk-toggle" type="button" onclick="toggleChk(\'' + cl.id + '\', this)">检查项（' + items.length + '）▸</button>'
+            + '<div class="todo-chk" id="chk-' + cl.id + '" style="display:none">' + itemsHtml + '</div>'
+            + '</div>';
         }
         const wf = cl.workflow_stage || '';
         const proc = `<div class="todo-proc">
-          <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{workflow_stage:'designed'})">完成方案设计</button>
-          <button class="btn-mini ${wf==='communicated'?'btn-mini-green':'btn-mini-blue'}" onclick="patchChecklistField('${cl.id}',{workflow_stage:'communicated',status:'completed'})">方案沟通完成</button>
+          ${actBtn(cl.id, 'btn-mini-blue', '完成方案设计', {workflow_stage:'designed'})}
+          ${actBtn(cl.id, wf==='communicated'?'btn-mini-green':'btn-mini-blue', '方案沟通完成', {workflow_stage:'communicated',status:'completed'})}
           ${wf ? `<span class="chk-tag ${wf==='communicated'?'done':'todo'}">${wf==='communicated'?'已沟通':'已设计'}</span>` : ''}
         </div>`;
         return `<div class="todo-item" data-clid="${cl.id}">
@@ -2466,11 +2585,11 @@
         return `<div class="todo-item" data-clid="${cl.id}">
           <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
             ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
-            <button class="btn-mini-green" onclick="markBonded('${cl.id}')">佩戴完成</button></div>
+            ${markBtn(cl.id, '佩戴完成')}</div>
           <div class="todo-meta">${meta.join(' · ')}</div>
           <div class="todo-proc">${proc.join(' · ')}
-            <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{sent:true})">完成送件</button>
-            <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{received:true})">完成收件</button>
+            ${actBtn(cl.id, 'btn-mini-blue', '完成送件', {sent:true})}
+            ${actBtn(cl.id, 'btn-mini-blue', '完成收件', {received:true})}
           </div></div>`;
       }
       // 隐形重启：重启设计 + 收件 + 佩戴
@@ -2480,11 +2599,11 @@
       return `<div class="todo-item" data-clid="${cl.id}">
         <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
           ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
-          <button class="btn-mini-green" onclick="markBonded('${cl.id}')">佩戴完成</button></div>
+          ${markBtn(cl.id, '佩戴完成')}</div>
         <div class="todo-meta">${meta.join(' · ')}</div>
         <div class="todo-proc">${rproc.join(' · ')}
-          <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{workflow_stage:'designed'})">完成重启设计</button>
-          <button class="btn-mini-blue" onclick="patchChecklistField('${cl.id}',{received:true})">完成收件</button>
+          ${actBtn(cl.id, 'btn-mini-blue', '完成重启设计', {workflow_stage:'designed'})}
+          ${actBtn(cl.id, 'btn-mini-blue', '完成收件', {received:true})}
         </div></div>`;
     }
     function renderTodoBoard() {
