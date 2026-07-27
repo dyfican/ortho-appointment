@@ -565,11 +565,13 @@
       .chk-toggle:hover { background:#e2e8f0; }
     .board-summary { font-size:13px;color:#4a5568;margin-bottom:8px;padding:6px 10px;background:#fffaf0;border-radius:8px; }
     .board-summary b { color:#c53030; }
-    .todo-item { background:#f7fafc;border-left:3px solid #c53030;border-radius:10px;padding:10px 12px;margin-bottom:8px; }
-    .todo-head { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+    .todo-item { display:grid;grid-template-columns:120px 1fr;gap:0;background:#f7fafc;border-left:3px solid #c53030;border-radius:10px;margin-bottom:8px;padding:10px 12px 10px 0; }
+    .todo-head { display:flex;align-items:center;gap:6px;flex-wrap:wrap;grid-column:2; }
     .todo-card { font-size:12px;color:#718096; }
-    .todo-meta, .todo-proc { font-size:12px;color:#718096;margin-top:4px; }
-    .todo-proc { color:#3182ce; }
+    .todo-meta { font-size:12px;color:#718096;margin-top:4px;grid-column:2; }
+    .todo-proc { grid-column:1;grid-row:1/-1;display:flex;flex-direction:column;gap:6px;align-items:flex-start;justify-content:center;padding:4px 6px 4px 8px;border-right:1px solid #e2e8f0;margin:0 10px 0 0;color:#3182ce;font-size:12px; }
+    .todo-proc .chk-tag { white-space:nowrap;font-size:12px; }
+    .todo-chk-collapse { grid-column:2; }
     .todo-chk { margin-top:6px; display:flex; flex-wrap:wrap; gap:4px; }
     .chk-tag { display:inline-block; font-size:12px; padding:2px 7px; border-radius:10px; background:#edf2f7; color:#4a5568; }
     .chk-tag.done { background:#c6f6d5; color:#22543d; }
@@ -616,6 +618,9 @@
       .sb-item { flex:1; padding:14px 18px; font-size:15px; text-align:center; border-left:none; }
       .sb-footer { flex-direction:row; border-top:none; border-left:1px solid rgba(255,255,255,0.12); padding-top:0; padding-left:12px; margin-top:0; margin-left:auto; }
       .appt-board { grid-template-columns:1fr; }
+      /* 窄屏：卡片左侧阶段栏回退到顶部横排 */
+      .todo-item { grid-template-columns:1fr; }
+      .todo-proc { grid-column:1; grid-row:auto; flex-direction:row; flex-wrap:wrap; border-right:none; border-bottom:1px solid #e2e8f0; padding:6px 4px; margin:0 0 6px 0; }
       /* 手机端：待办动作按钮整宽大触控块 */
       .todo-chk { flex-direction:column; gap:8px; }
       .todo-chk .btn-mini, .todo-chk .btn-mini-blue, .todo-chk .btn-mini-green, .todo-chk .btn-mini-red, .todo-chk .btn-mini-gray { display:block; width:100%; box-sizing:border-box; padding:12px 8px; font-size:14px; margin:0; }
@@ -2558,6 +2563,8 @@
     function todoCardHtml(cl) {
       const eName = escapeHtml(cl.patient_name);
       const eCard = escapeHtml(cl.patient_card || '');
+      // 类型颜色：new_patient=蓝(#3182ce)、broken=红(#c53030)、restart=橙(#dd6b20)
+      const typeBorderColor = cl.checklist_type === 'new_patient' ? '#3182ce' : (cl.checklist_type === 'restart' ? '#dd6b20' : '#c53030');
       const meta = [];
       if (cl.checklist_type) meta.push('类型：' + (TYPE_LABEL2[cl.checklist_type] || cl.checklist_type));
       if (cl.campus) meta.push('登记院区：' + (CAMPUS_LABEL2[cl.campus] || cl.campus));
@@ -2583,12 +2590,19 @@
             + '</div>';
         }
         const wf = cl.workflow_stage || '';
-        const proc = `<div class="todo-proc">
-          ${actBtn(cl.id, 'btn-mini-blue', '完成方案设计', {workflow_stage:'designed'})}
-          ${actBtn(cl.id, wf==='communicated'?'btn-mini-green':'btn-mini-blue', '方案沟通完成', {workflow_stage:'communicated',status:'completed'})}
-          ${wf ? `<span class="chk-tag ${wf==='communicated'?'done':'todo'}">${wf==='communicated'?'已沟通':'已设计'}</span>` : ''}
-        </div>`;
-        return `<div class="todo-item" data-clid="${cl.id}">
+        // 阶段按钮智能显示：已完成步骤替换为标签，未完成按钮可点击
+        const stageBtns = [];
+        if (wf === 'communicated') {
+          stageBtns.push('<span class="chk-tag done">✓ 已沟通</span>');
+        } else if (wf === 'designed') {
+          stageBtns.push('<span class="chk-tag done">✓ 已设计</span>');
+          stageBtns.push(actBtn(cl.id, 'btn-mini-blue', '方案沟通完成', {workflow_stage:'communicated',status:'completed'}));
+        } else {
+          stageBtns.push(actBtn(cl.id, 'btn-mini-blue', '完成方案设计', {workflow_stage:'designed'}));
+          stageBtns.push(actBtn(cl.id, 'btn-mini-blue', '方案沟通完成', {workflow_stage:'communicated',status:'completed'}));
+        }
+        const proc = `<div class="todo-proc">${stageBtns.join('\n')}</div>`;
+        return `<div class="todo-item" style="border-left-color:${typeBorderColor}" data-clid="${cl.id}">
           <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
             ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}</div>
           <div class="todo-meta">${meta.join(' · ')}</div>
@@ -2600,28 +2614,28 @@
         const proc = [];
         proc.push('加工件送回：' + (cl.sent ? '已送回' : '未送回'));
         proc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
-        return `<div class="todo-item" data-clid="${cl.id}">
+        return `<div class="todo-item" style="border-left-color:${typeBorderColor}" data-clid="${cl.id}">
           <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
             ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
             ${markBtn(cl.id, '佩戴完成')}</div>
           <div class="todo-meta">${meta.join(' · ')}</div>
           <div class="todo-proc">${proc.join(' · ')}
-            ${actBtn(cl.id, 'btn-mini-blue', '完成送件', {sent:true})}
-            ${actBtn(cl.id, 'btn-mini-blue', '完成收件', {received:true})}
+            ${cl.sent ? '<span class="chk-tag done">✓ 已送件</span>' : actBtn(cl.id, 'btn-mini-blue', '完成送件', {sent:true})}
+            ${cl.received ? '<span class="chk-tag done">✓ 已收件</span>' : actBtn(cl.id, 'btn-mini-blue', '完成收件', {received:true})}
           </div></div>`;
       }
       // 隐形重启：重启设计 + 收件 + 佩戴
       const rproc = [];
       rproc.push('重启设计：' + (cl.workflow_stage === 'designed' ? '已完成' : '未开始'));
       rproc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
-      return `<div class="todo-item" data-clid="${cl.id}">
+      return `<div class="todo-item" style="border-left-color:${typeBorderColor}" data-clid="${cl.id}">
         <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
           ${cl.patient_age ? `<span class="badge">${cl.patient_age}岁</span>` : ''}
           ${markBtn(cl.id, '佩戴完成')}</div>
         <div class="todo-meta">${meta.join(' · ')}</div>
         <div class="todo-proc">${rproc.join(' · ')}
-          ${actBtn(cl.id, 'btn-mini-blue', '完成重启设计', {workflow_stage:'designed'})}
-          ${actBtn(cl.id, 'btn-mini-blue', '完成收件', {received:true})}
+          ${cl.workflow_stage==='designed' ? '<span class="chk-tag done">✓ 已设计</span>' : actBtn(cl.id, 'btn-mini-blue', '完成重启设计', {workflow_stage:'designed'})}
+          ${cl.received ? '<span class="chk-tag done">✓ 已收件</span>' : actBtn(cl.id, 'btn-mini-blue', '完成收件', {received:true})}
         </div></div>`;
     }
     function renderTodoBoard() {
@@ -2842,6 +2856,11 @@
         if (loc !== 'all') data = data.filter(r => r.location === loc);
         document.getElementById('scanHdInfo').textContent = date + ' ' + wd + ' · ' + (SCAN_LOC_MAP[loc]||loc) + ' · 共 ' + data.length + ' 人';
         renderScan(data);
+        // 有"新"记录时震动反馈（安卓/Chrome支持，iOS静默跳过）
+        if (navigator.vibrate) {
+          const hasNew = data.some(r => r.created_at && (Date.now() - new Date(r.created_at).getTime() <= 48*3600*1000));
+          if (hasNew) navigator.vibrate(100);
+        }
       } catch (e) {
         document.getElementById('scanList').innerHTML = '<div class="scan-status">加载失败：' + escScan(e.message) + '<br>请检查网络或稍后刷新</div>';
       }
