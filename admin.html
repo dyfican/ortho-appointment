@@ -1125,6 +1125,7 @@
 
     // ===== 日历渲染 =====
     function renderCalendar() {
+      _buildSlotCountMap();
       const calendar = document.getElementById('calendar');
       const monthLabel = document.getElementById('monthLabel');
       calendar.innerHTML = '';
@@ -1203,6 +1204,8 @@
       if (currentMonth > 11) { currentMonth = 0; currentYear++; }
       if (currentMonth < 0) { currentMonth = 11; currentYear--; }
       renderCalendar();
+      renderApptCalendar();
+      if (apptCalDate) renderApptDayList();
     }
 
     // ===== 预约逻辑 =====
@@ -1277,9 +1280,19 @@
       document.getElementById('bookingForm').style.display = 'block';
     }
 
+    // ===== 月历性能优化：预约数量缓存（避免 62 次全量遍历）=====
+    let _slotCountMap = {};
+    function _buildSlotCountMap() {
+      _slotCountMap = {};
+      appointments.forEach(a => {
+        if (a.status === 'cancel') return;
+        const key = a.date + '_' + a.slot;
+        _slotCountMap[key] = (_slotCountMap[key] || 0) + 1;
+      });
+    }
     function getSlotCount(date, slot) {
-      const dateStr = formatDate(date);  // YYYY-MM-DD 格式
-      return appointments.filter(a => a.date === dateStr && a.slot === slot && a.status !== 'cancel').length;
+      const dateStr = formatDate(date);
+      return _slotCountMap[dateStr + '_' + slot] || 0;
     }
 
     function updateReturnBadge() {
@@ -2734,6 +2747,7 @@
 
     // ===== 预约看板：月历（已约/放号）+ 当日名单（只列名字+🔴待办）=====
     function renderApptCalendar() {
+      _buildSlotCountMap();
       const cal = document.getElementById('apptCalendar');
       const ml = document.getElementById('apptMonthLabel');
       if (!cal || !ml) return;

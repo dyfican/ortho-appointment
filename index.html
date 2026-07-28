@@ -1528,7 +1528,7 @@
     }
     async function toggleItem(itemId, completed, skipped) {
       try {
-        await sbFetch('checklist_items', { method: 'PATCH', query: `?id=eq.${itemId}`, body: { completed: !!completed, skipped: !!skipped, completed_at: completed ? new Date().toISOString() : null } });
+        await sbRpc('toggle_checklist_item', { p_item_id: itemId, p_completed: !!completed, p_skipped: !!skipped });
         await renderChecklist(currentChecklistId);
       } catch(e) { console.error(e); showToast('更新失败', 'error'); }
     }
