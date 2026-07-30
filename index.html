@@ -16,6 +16,25 @@
       -webkit-font-smoothing: antialiased;
     }
     .container { max-width: 480px; margin: 0 auto; padding: 12px; }
+    .top-header { background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 12px; }
+    .top-header h1 { font-size: 18px; font-weight: 500; margin: 0 0 4px 0; }
+    .top-header p { font-size: 12px; opacity: 0.9; margin: 0; }
+    .top-tabs { display: flex; background: #c53030; border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+    .top-tabs .tab { padding: 10px 4px; color: rgba(255,255,255,0.85); cursor: pointer; text-align: center; font-size: 14px; transition: all 0.15s; user-select: none; }
+    .top-tabs .tab:hover { background: rgba(255,255,255,0.1); }
+    .top-tabs .tab.active { background: white; color: #c53030; font-weight: 500; }
+    .top-tabs .tab-appt { flex: 3; }
+    .top-tabs .tab-reg { flex: 1; }
+    .top-tabs .tab-notice { flex: 1; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .reg-type-card { display:flex; align-items:center; gap:12px; padding:14px; border:1px solid #e2e8f0; border-radius:10px; background:#f7fafc; cursor:pointer; transition:all 0.15s; }
+    .reg-type-card:hover { border-color:#c53030; background:#fff; }
+    .reg-type-icon { font-size:24px; }
+    .reg-type-info { flex:1; }
+    .reg-type-title { font-size:14px; font-weight:500; color:#2d3748; }
+    .reg-type-desc { font-size:12px; color:#718096; margin-top:2px; }
+    .reg-type-arrow { font-size:20px; color:#cbd5e0; }
 
     /* Header */
     header {
@@ -454,15 +473,18 @@
   </head>
 <body>
   <div class="container">
-    <div class="top-row">
-      <header>
-        <h1>段医生正畸门诊</h1>
-        <p>在线预约 · 请选择就诊日期</p>
-      </header>
-      <div class="reg-entry">
-        <button class="reg-btn" onclick="openRegistration()">初诊/矫治器登记</button>
-      </div>
+    <header class="top-header">
+      <h1>段医生正畸门诊</h1>
+      <p>在线预约 · 请选择就诊日期</p>
+    </header>
+    <div class="top-tabs">
+      <div class="tab tab-appt active" data-tab="appt">预约复诊</div>
+      <div class="tab tab-reg" data-tab="reg">初诊/矫治器登记</div>
+      <div class="tab tab-notice" data-tab="notice" id="noticeTab" style="display:none">注意事项</div>
     </div>
+
+    <!-- Tab 1: 预约复诊（默认） -->
+    <div class="tab-content active" data-content="appt">
 
     <!-- 日历 -->
     <div class="card">
@@ -539,11 +561,72 @@
           </div>
           <div style="font-size:11px;color:#718096;margin-top:4px;">默认=本次预约院区，可手动改（同步至医生端）</div>
         </div>
+        <!-- 复诊问题勾选 -->
+        <div class="form-group" id="issueTagsGroup" style="margin-bottom:8px;">
+          <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:4px;">本次就诊</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            <label style="display:flex;align-items:center;gap:4px;font-size:13px;padding:4px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;cursor:pointer;"><input type="checkbox" id="it_normal" checked onchange="itMutual()"> 正常复诊</label>
+            <label style="ditto"><input type="checkbox" class="it-issue" onchange="itMutual()"> 牙套脱落</label>
+            <label style="ditto"><input type="checkbox" class="it-issue" onchange="itMutual()"> 钢丝滑动</label>
+            <label style="ditto"><input type="checkbox" class="it-issue" onchange="itMutual()"> 埋伏牙牵引</label>
+            <label style="ditto"><input type="checkbox" class="it-issue" onchange="itMutual()"> 种植支抗植入</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:13px;padding:4px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;cursor:pointer;"><input type="checkbox" class="it-issue" onchange="itMutual()"> 其他 <input type="text" id="it_other" placeholder="注明" style="width:60px;font-size:12px;padding:1px 4px;border:1px solid #e2e8f0;border-radius:4px;margin-left:2px;"></label>
+          </div>
+        </div>
+        <!-- 拍照提醒条（>90天无拍照时显示） -->
+        <div id="photoReminder" style="display:none;background:#fffbeb;border:1px solid #f6e05e;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#92400e;">
+          ⏰ 您已 <span id="photoMonths"></span> 个月没有拍照，就诊时请直接索取拍照单，先行拍照，然后就诊。
+        </div>
         <button class="btn-primary" id="submitBtn" onclick="submitBooking()">确认预约</button>
       </div>
     </div>
+    </div><!--/slotCard-->
 
-    <!-- 复诊 / 初诊登记 -->
+    </div><!--/tab-content appt-->
+
+    <!-- Tab 2: 初诊/矫治器登记 -->
+    <div class="tab-content" data-content="reg">
+      <div class="card">
+        <div class="card-title" style="text-align:center;">📋 选择登记类型</div>
+        <div style="display:flex;flex-direction:column;gap:10px;padding:6px 0;">
+          <div class="reg-type-card" onclick="openRegistration('new_patient')">
+            <div class="reg-type-icon">📋</div>
+            <div class="reg-type-info">
+              <div class="reg-type-title">初诊检查</div>
+              <div class="reg-type-desc">CBCT · MRI · X线 · 查血 · 口扫 · 拍照</div>
+            </div>
+            <div class="reg-type-arrow">›</div>
+          </div>
+          <div class="reg-type-card" onclick="openRegistration('broken')">
+            <div class="reg-type-icon">🔧</div>
+            <div class="reg-type-info">
+              <div class="reg-type-title">矫治器破损</div>
+              <div class="reg-type-desc">口扫 + 拍照，记录加工件送回</div>
+            </div>
+            <div class="reg-type-arrow">›</div>
+          </div>
+          <div class="reg-type-card" onclick="openRegistration('restart')">
+            <div class="reg-type-icon">🌀</div>
+            <div class="reg-type-info">
+              <div class="reg-type-title">隐形重启</div>
+              <div class="reg-type-desc">重启设计 + 收件，开始新阶段</div>
+            </div>
+            <div class="reg-type-arrow">›</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#a0aec0;text-align:center;margin-top:8px;">点击进入登记流程</div>
+      </div>
+    </div>
+
+    <!-- Tab 3: 注意事项 -->
+    <div class="tab-content" data-content="notice">
+      <div class="card">
+        <div class="card-title">📖 诊疗须知</div>
+        <div id="noticeSidebar" style="font-size:13px;color:#718096;">加载中…</div>
+      </div>
+    </div>
+
+    <!-- 复诊 / 初诊登记（弹窗，复用）-->
     <div class="card" id="regCard" style="display:none;">
       <div class="card-title">
         <span>复诊 / 初诊登记</span>
@@ -789,7 +872,8 @@
             location: appt.location,
             status: 'booked',
             note: appt.note || '',
-            age: appt.age || null
+            age: appt.age || null,
+            issue_tags: appt.issue_tags || ''
           }
         });
         if (result && result.length > 0 && result[0] && result[0].id) {
@@ -1107,7 +1191,57 @@
       }
     }
 
+    // ===== Tab 切换（预约 / 登记 / 注意事项）=====
+    function switchPatientTab(name) {
+      document.querySelectorAll('.top-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.dataset.content === name));
+    }
+    // 注意事项入口默认隐藏，后台发布内容后调用此方法开启
+    function enableNoticeTab() {
+      const el = document.getElementById('noticeTab');
+      if (el) el.style.display = '';
+    }
+    document.querySelectorAll('.top-tabs .tab').forEach(tab => {
+      tab.addEventListener('click', () => switchPatientTab(tab.dataset.tab));
+    });
+
     // ===== 提交预约 =====
+    // 问题勾选互斥：选具体问题时取消"正常复诊"
+    function itMutual() {
+      const anyIssue = document.querySelectorAll('.it-issue:checked').length > 0;
+      document.getElementById('it_normal').checked = !anyIssue;
+    }
+    // 收集问题标签
+    function collectIssueTags() {
+      if (!document.getElementById('it_normal').checked && !document.querySelector('.it-issue:checked')) return '正常复诊';
+      const tags = [];
+      if (document.getElementById('it_normal').checked) tags.push('正常复诊');
+      document.querySelectorAll('.it-issue:checked').forEach(cb => {
+        const text = cb.parentNode.textContent.trim();
+        if (text === '其他') {
+          const val = document.getElementById('it_other').value.trim();
+          if (val) tags.push(val);
+        } else {
+          tags.push(text);
+        }
+      });
+      return tags.join(',');
+    }
+    // 检查拍照提醒
+    async function checkPhotoReminder(card) {
+      try {
+        const last = await sbRpc('get_latest_photo_date', { p_card: card });
+        if (!last) { document.getElementById('photoReminder').style.display = 'none'; return; }
+        const diff = Date.now() - new Date(last).getTime();
+        const days = Math.floor(diff / (24*3600*1000));
+        if (days > 90) {
+          document.getElementById('photoMonths').textContent = Math.floor(days / 30);
+          document.getElementById('photoReminder').style.display = 'block';
+        } else {
+          document.getElementById('photoReminder').style.display = 'none';
+        }
+      } catch(e) { document.getElementById('photoReminder').style.display = 'none'; }
+    }
     async function submitBooking() {
       const btn = document.getElementById('submitBtn');
       const name = document.getElementById('patientName').value.trim();
@@ -1138,8 +1272,8 @@
       // 防重复预约：RPC 异常时阻断（不下雪静默跳过），由外层 catch 或本层 return 兜底
       const dateStr = formatDate(selectedDate);
       try {
-        const isDup = await sbRpc('check_duplicate_booking', { p_card: card, p_date: dateStr, p_slot: selectedSlot });
-        if (isDup) { showToast('您已预约了该日期及时段，请勿重复预约', 'error'); return; }
+        const isDup = await sbRpc('check_duplicate_booking', { p_card: card });
+        if (isDup) { showToast('您已有未执行的预约，如需更换日期请先取消当前预约后再重新预约', 'error'); return; }
       } catch(e) {
         showToast('预约校验失败，请稍后重试', 'error');
         btn.disabled = false; btn.classList.remove('btn-loading'); btn.textContent = '确认预约';
@@ -1160,10 +1294,14 @@
 
       // 进入提交：禁用按钮防连点
       btn.disabled = true; btn.classList.add('btn-loading'); btn.textContent = '提交中…';
+      // 收集问题标签
+      const issueTags = collectIssueTags();
+      // 拍照提醒（不阻塞提交，只展示）
+      checkPhotoReminder(card);
       try {
         const appt = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2,5),
-          name, card, note, isReturn, age,
+          name, card, note, isReturn, age, issue_tags: issueTags,
           date: formatDate(selectedDate),  // YYYY-MM-DD 格式，匹配 Supabase date 列
           slot: selectedSlot,
           location: cfg.location,
@@ -1241,6 +1379,7 @@
         <p style="font-size:12px;color:#e53e3e;margin-top:2px;">📍 ${LOCATION_ADDRESSES[appt.location]}</p>
         ${appt.note?`<p><strong>备注：</strong>${escapeHtml(appt.note)}</p>`:''}
         <p class="voucher-id">凭证号：${escapeHtml(appt.id)}</p>
+        ${document.getElementById('photoReminder').style.display !== 'none' ? `<p style="margin-top:8px;padding:6px 8px;background:#fffbeb;border-radius:6px;font-size:12px;color:#92400e;">⏰ 您已 ${document.getElementById('photoMonths').textContent} 个月没拍照，就诊时先取拍照单拍照。</p>` : ''}
       `;
 
       document.getElementById('successModal').classList.add('active');
@@ -1358,6 +1497,27 @@
       showToast('已取消预约');
     }
 
+    // ===== 注意事项（患者端侧栏）=====
+    async function loadNotices() {
+      try {
+        const data = await sbFetch('patient_notices', { query: '?select=title,category,content,sort_order&status=eq.published&order=sort_order.asc' });
+        renderNoticeSidebar(data || []);
+      } catch(e) { console.warn('load notices failed', e); }
+    }
+    function renderNoticeSidebar(list) {
+      const el = document.getElementById('noticeSidebar');
+      if (!el) return;
+      if (!list.length) { el.innerHTML = '<div style="font-size:12px;">暂无</div>'; return; }
+      el.innerHTML = list.map(n => `<div style="margin-bottom:6px;padding:6px 8px;background:#f7fafc;border-radius:6px;cursor:pointer;" onclick="showNoticeDetail('${escapeHtml(n.title)}','${escapeHtml(n.content.replace(/'/g,"\\'"))}')">
+        <div style="font-weight:600;font-size:13px;">${escapeHtml(n.title)}</div>
+        <div style="font-size:11px;color:#718096;margin-top:2px;">${escapeHtml(n.category==='general'?'通用':(n.category==='aligner'?'隐形':n.category==='retainer'?'保持器':n.category==='brace'?'托槽':'术后'))}</div>
+      </div>`).join('');
+      el.innerHTML += '<div style="font-size:11px;color:#a0aec0;text-align:center;margin-top:4px;">点击条目查看详情</div>';
+    }
+    function showNoticeDetail(title, content) {
+      alert(title + '\n\n' + content);
+    }
+
     // ===== 复诊 / 初诊登记模块 =====
     const STORAGE_CHECKLIST = 'ortho_checklist_id';
     const CAMPUS_LABEL = { south: '南部', east: '东部' };
@@ -1389,9 +1549,12 @@
       } catch(e) { console.warn('load templates failed', e); }
     }
 
-    function openRegistration() {
+    function openRegistration(t) {
+      if (t) selectRegType(t);
       const card = document.getElementById('regCard');
       card.style.display = 'block';
+      // 自动切到登记 tab
+      switchPatientTab('reg');
       const lp = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.lastPatient)); } catch(e){ return null; } })();
       if (lp) {
         document.getElementById('regName').value = lp.name || '';
@@ -1557,6 +1720,7 @@
     (async () => {
       await loadData();
       await loadTemplates();
+      loadNotices();
       renderCalendar();
     })();
   </script>

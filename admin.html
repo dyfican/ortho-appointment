@@ -691,6 +691,7 @@
         <button class="sb-item" data-board="appt" onclick="switchBoard('appt')">📅 预约看板</button>
         <button class="sb-item" id="navSched" data-board="sched" onclick="switchBoard('sched')">⚙️ 排班看板</button>
         <button class="sb-item" id="navScan" data-board="scan" onclick="switchBoard('scan')" style="display:none">📷 扫码录入</button>
+        <button class="sb-item" data-board="notices" onclick="switchBoard('notices')">📖 须知管理</button>
       </nav>
       <div class="sb-footer">
         <button class="sb-mini" id="navExport" onclick="exportData()">📤 导出备份</button>
@@ -785,6 +786,12 @@
         </div>
         <div class="scan-list" id="scanList"><div class="scan-status">加载中…</div></div>
         <div class="scan-tip">点击二维码可放大扫描 · 数据实时同步预约系统</div>
+      </div>
+      <div id="page-notices" class="board-page">
+        <div class="page-head"><h2>须知管理</h2>
+          <button class="btn-green" onclick="showNoticeEditor()">➕ 新建须知</button>
+        </div>
+        <div id="noticeList"><div class="empty-state">加载中…</div></div>
       </div>
     </div>
   </div>
@@ -1293,6 +1300,47 @@
     function getSlotCount(date, slot) {
       const dateStr = formatDate(date);
       return _slotCountMap[dateStr + '_' + slot] || 0;
+    }
+
+    // ===== 拍照提醒缓存 =====
+    let _photoDateMap = {}; // patient_card → timestamp
+    function _buildPhotoDateMap() {
+      _photoDateMap = {};
+      checklists.forEach(cl => {
+        if (!cl.patient_card) return;
+        const items = checklistItems.filter(i => i.checklist_id === cl.id);
+        const photo = items.find(i => i.item_name === '拍照' && i.completed);
+        if (photo && photo.completed_at) {
+          const existing = _photoDateMap[cl.patient_card];
+          if (!existing || new Date(photo.completed_at) > new Date(existing)) {
+            _photoDateMap[cl.patient_card] = photo.completed_at;
+          }
+        }
+      });
+    }
+    function _needsPhoto(card) {
+      const last = _photoDateMap[card];
+      if (!last) return false;
+      return (Date.now() - new Date(last).getTime()) > 90 * 24 * 3600 * 1000;
+    }
+    // ===== 拍照标记（医生端手动）=====
+    let _todayPhotoCards = new Set();
+    function _hasPhotoToday(card) { return _todayPhotoCards.has(card); }
+    async function _loadTodayPhotos() {
+      try {
+        const todayStr = new Date().toISOString().slice(0,10);
+        const data = await sbFetch('patient_photos', { query: '?select=patient_card&photo_date=eq.' + encodeURIComponent(todayStr) });
+        (data || []).forEach(r => { if (r.patient_card) _todayPhotoCards.add(r.patient_card); });
+      } catch(e) { /* table may not exist yet */ }
+    }
+    async function markPhotoTaken(card, btnEl) {
+      if (!card) return;
+      try {
+        await sbFetch('patient_photos', { method: 'POST', body: { patient_card: card, photo_date: new Date().toISOString().slice(0,10) } });
+        _todayPhotoCards.add(card);
+        btnEl.outerHTML = '<span style="display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;background:#c6f6d5;color:#22543d;">✅ 今日已拍</span>';
+        if (document.getElementById('page-scan') && document.getElementById('page-scan').classList.contains('active')) loadScan();
+      } catch(e) { showToast('标记失败', 'error'); }
     }
 
     function updateReturnBadge() {
@@ -2796,6 +2844,7 @@
       }
     }
     function renderApptDayList() {
+      _buildPhotoDateMap();
       const el = document.getElementById('apptDayList');
       const titleEl = document.getElementById('apptDayTitle');
       if (!el) return;
@@ -2839,7 +2888,11 @@
                 ).join('');
               }
             }
-            html += '<div class="appt-patient-row">' + escapeHtml(a.name) + todoTag + '</div>';
+            html += '<div class="appt-patient-row">' + escapeHtml(a.name)
+              + todoTag
+              + (a.issue_tags && a.issue_tags !== '正常复诊' ? ' <span class="badge-issue" style="display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;background:#ebf8ff;color:#2b6cb0;border:1px solid #bee3f8;">' + escapeHtml(a.issue_tags) + '</span>' : '')
+              + (_hasPhotoToday(a.card) ? ' <span style="display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;background:#c6f6d5;color:#22543d;">✅ 今日已拍</span>' : ' <span class="btn-photo-mark" style="display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:#ebf8ff;color:#2b6cb0;border:1px solid #bee3f8;cursor:pointer;" onclick="markPhotoTaken(\'' + escapeHtml(a.card) + '\', this)">📷 标记拍照</span>')
+              + '</div>';
           });
         }
         html += '</div>';
@@ -2855,6 +2908,8 @@
     function makeQRScan(container, text, size){ container.innerHTML=''; new QRCode(container, { text:text, width:size, height:size, colorDark:'#000000', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.M }); }
     let scanLoaded = false;
     async function loadScan(){
+      _loadTodayPhotos();
+      _buildPhotoDateMap();
       const dateEl = document.getElementById('scanSelDate');
       if (!dateEl) return;
       const date = dateEl.value || scanTodayStr();
@@ -2915,7 +2970,9 @@
       const isNew = r.created_at && (Date.now() - new Date(r.created_at).getTime() <= 48*3600*1000);
       const newTag = isNew ? '<span class="p-new">新</span>' : '';
       const note = r.note ? '<div class="p-note">📝 '+escScan(r.note)+'</div>' : '';
-      const meta = (card?'<span>卡号 '+card+'</span>':'') + (ageStr?'<span>'+ageStr+'</span>':'') + '<span class="p-slot">'+slotLabel+'</span>';
+      const meta = (card?'<span>卡号 '+card+'</span>':'') + (ageStr?'<span>'+ageStr+'</span>':'') + '<span class="p-slot">'+slotLabel+'</span>'
+        + (r.issue_tags && r.issue_tags !== '正常复诊' ? ' <span style="display:inline-block;font-size:10px;padding:0 5px;border-radius:8px;background:#ebf8ff;color:#2b6cb0;">'+escScan(r.issue_tags)+'</span>' : '')
+        + (_needsPhoto(r.patient_card) ? ' <span style="display:inline-block;font-size:10px;padding:0 5px;border-radius:8px;background:#fffbeb;color:#92400e;">📷</span>' : '');
       return '<div class="p-card">'+newTag+'<div class="p-no">'+idx+'</div>'
            + '<div class="p-info"><div class="p-name">'+name+'</div><div class="p-meta">'+meta+'</div>'+note+'</div>'
            + '<div class="qr-wrap" data-card="'+card+'" data-name="'+name+'" onclick="zoomQRScan(this)">'
@@ -2932,6 +2989,55 @@
       document.body.style.overflow = '';
     }
 
+    // ===== 须知管理 CRUD =====
+    let notices = [];
+    async function renderNoticeList() {
+      const el = document.getElementById('noticeList');
+      if (!el) return;
+      try {
+        const data = await sbFetch('patient_notices', { query: '?select=*&order=sort_order.asc' });
+        notices = data || [];
+        el.innerHTML = notices.length === 0 ? '<div class="empty-state">暂无须知条目</div>' :
+          notices.map(n => `<div class="todo-item notice-item" style="margin-bottom:8px;padding:10px;display:flex;align-items:center;gap:10px;">
+            <div style="flex:1;"><strong>${escapeHtml(n.title)}</strong>
+              <span style="font-size:12px;color:#718096;margin-left:8px;">[${n.category}]</span>
+              <span class="chk-tag ${n.status==='published'?'done':'todo'}">${n.status==='published'?'已发布':'草稿'}</span>
+            </div>
+            <button class="btn-mini-blue" onclick="showNoticeEditor('${n.id}')">编辑</button>
+            <button class="btn-mini-red" onclick="deleteNotice('${n.id}')">删除</button>
+          </div>`).join('');
+      } catch(e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+    }
+    async function showNoticeEditor(id) {
+      const n = notices.find(x => x.id === id);
+      const title = prompt('标题：', n ? n.title : '');
+      if (title === null) return;
+      const category = prompt('分类（general/aligner/retainer/brace/postop）：', n ? n.category : 'general');
+      if (category === null) return;
+      const content = prompt('内容（支持多行，用 \\n 分隔）：', n ? n.content : '');
+      if (content === null) return;
+      const sort = prompt('排序号：', n ? String(n.sort_order) : '0');
+      if (sort === null) return;
+      const status = confirm('发布？点"确定"=发布，"取消"=草稿') ? 'published' : 'draft';
+      try {
+        if (n) {
+          await sbFetch('patient_notices', { method: 'PATCH', query: `?id=eq.${id}`, body: { title, category, content, sort_order: parseInt(sort) || 0, status } });
+        } else {
+          await sbFetch('patient_notices', { method: 'POST', body: { title, category, content, sort_order: parseInt(sort) || 0, status } });
+        }
+        renderNoticeList();
+        showToast('已保存');
+      } catch(e) { showToast('保存失败：' + e.message, 'error'); }
+    }
+    async function deleteNotice(id) {
+      if (!confirm('确定删除该须知？')) return;
+      try {
+        await sbFetch('patient_notices', { method: 'DELETE', query: `?id=eq.${id}` });
+        renderNoticeList();
+        showToast('已删除');
+      } catch(e) { showToast('删除失败', 'error'); }
+    }
+
     function switchBoard(name) {
       document.querySelectorAll('.board-page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.sb-item').forEach(b => b.classList.remove('active'));
@@ -2939,10 +3045,11 @@
       if (page) page.classList.add('active');
       const btn = document.querySelector('.sb-item[data-board="' + name + '"]');
       if (btn) btn.classList.add('active');
-      if (name === 'appt') { renderApptCalendar(); renderApptDayList(); }
+      if (name === 'appt') { renderApptCalendar(); renderApptDayList(); _loadTodayPhotos(); }
       else if (name === 'sched') { renderCalendar(); renderRuleList(); }
       else if (name === 'todo') { renderTodoBoard(); }
       else if (name === 'scan') { const d = document.getElementById('scanSelDate'); if (d && !d.value) d.value = scanTodayStr(); loadScan(); }
+      else if (name === 'notices') { renderNoticeList(); }
     }
     // ===== 初始化 =====
     (async () => {
@@ -2952,6 +3059,7 @@
       renderTodoBoard();
       renderApptCalendar();
       renderApptDayList();
+      _loadTodayPhotos();
       switchBoard('todo');
     })();
   </script>
