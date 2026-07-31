@@ -1273,7 +1273,7 @@
       const dateStr = formatDate(selectedDate);
       try {
         const isDup = await sbRpc('check_duplicate_booking', { p_card: card });
-        if (isDup) { showToast('您已有未执行的预约，如需更换日期请先取消当前预约后再重新预约', 'error'); return; }
+        if (isDup) { showToast('您已有未来的预约，如需更换日期请先取消后再预约', 'error'); return; }
       } catch(e) {
         showToast('预约校验失败，请稍后重试', 'error');
         btn.disabled = false; btn.classList.remove('btn-loading'); btn.textContent = '确认预约';
