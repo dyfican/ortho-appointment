@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test tests/unit/business-rules.test.mjs tests/unit/proxy-auth.test.mjs",
     "e2e": "playwright test",
-    "check": "node --check functions/api/sb/[[path]].js"
+    "check": "node --check functions/api/sb/[[path]].js",
+    "predeploy": "node scripts/pre-deploy-check.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
