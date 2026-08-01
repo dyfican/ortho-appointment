@@ -1,0 +1,15 @@
+{
+  "name": "ortho-appointment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "段医生正畸预约+登记系统（duan-ortho.top）",
+  "scripts": {
+    "test": "node --test tests/unit/business-rules.test.mjs tests/unit/proxy-auth.test.mjs",
+    "e2e": "playwright test",
+    "check": "node --check functions/api/sb/[[path]].js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "vitest": "^4.1.10"
+  }
+}
