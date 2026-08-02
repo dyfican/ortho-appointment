@@ -1,0 +1,16 @@
+{
+  "name": "段医生正畸门诊 · 管理后台",
+  "short_name": "正畸后台",
+  "description": "医生端待办/预约/扫码看板",
+  "start_url": "/admin.html?staff=1&k=ZhouStaff2026%23ortho",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a202c",
+  "theme_color": "#c2410c",
+  "icons": [
+    { "src": "/icon-staff-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-staff-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-staff.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -1,29 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-
-// 模拟代理鉴权逻辑（从 functions/api/sb/[[path]].js 提取）
-const STAFF_READ_TABLES=['appointments','checklists','checklist_items','schedule_rules','holidays','schedule_overrides'];
-const STAFF_ALLOWED_COLUMNS=['workflow_stage','sent','received','bonded','status'];
-
-function checkAuth(headers,env){
-  const adminKey=headers['x-admin-key'];
-  const staffKey=headers['x-staff-key'];
-  const isAdmin=!!(adminKey&&adminKey===env.ADMIN_KEY);
-  const isStaff=!!(staffKey&&staffKey===env.STAFF_KEY);
-  return{isAdmin,isStaff};
-}
-
-function staffCanAccess(method,table){
-  if(method==='GET'||method==='HEAD')return STAFF_READ_TABLES.includes(table);
-  if(method==='PATCH')return table==='checklists';
-  return false; // POST/PUT/DELETE
-}
-
-function filterStaffFields(body){
-  const cleaned={};
-  for(const col of STAFF_ALLOWED_COLUMNS){if(col in body)cleaned[col]=body[col];}
-  return cleaned;
-}
+import { checkAuth, staffCanAccess, filterStaffFields, STAFF_READ_TABLES, STAFF_ALLOWED_COLUMNS } from '../../src/proxy-rules.mjs';
 
 const ENV={ADMIN_KEY:'test-admin-key',STAFF_KEY:'test-staff-key'};
 
