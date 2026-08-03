@@ -940,9 +940,6 @@
         const pageSched = document.getElementById('page-sched'); if (pageSched) pageSched.style.display = 'none';
         const navExport = document.getElementById('navExport'); if (navExport) navExport.style.display = 'none';
         const navScan = document.getElementById('navScan'); if (navScan) navScan.style.display = '';
-        const navNotices = document.querySelector('[data-board="notices"]'); if (navNotices) navNotices.style.display = 'none';
-        const pageNotices = document.getElementById('page-notices'); if (pageNotices) pageNotices.style.display = 'none';
-        const importBtn = document.querySelector('.sb-mini[onclick="importData()"]'); if (importBtn) importBtn.style.display = 'none';
         // 周医生口令门：把 ?k=口令 放进网址（添加到主屏的图标里），打开即自动进入、免手输
         // 用 localStorage 持久记忆已验证设备，避免 PWA 启动 URL 丢失 key 时重新弹密码
         const k = new URLSearchParams(location.search).get('k');
@@ -1223,8 +1220,6 @@
       selectedDate = date;
       selectedSlot = null;
       renderCalendar();
-      // 预约登记面板已移除（排班看板仅保留选中态），防 null 引用
-      if (!document.getElementById('selectedDateDisplay')) return;
 
       const ds = getDaySchedule(date);
       const dateStr = formatDate(date);
@@ -2896,7 +2891,7 @@
             html += '<div class="appt-patient-row">' + escapeHtml(a.name)
               + todoTag
               + (a.issue_tags && a.issue_tags !== '正常复诊' ? ' <span class="badge-issue" style="display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;background:#ebf8ff;color:#2b6cb0;border:1px solid #bee3f8;">' + escapeHtml(a.issue_tags) + '</span>' : '')
-              + (IS_STAFF ? '' : (_hasPhotoToday(a.card) ? ' <span style="display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;background:#c6f6d5;color:#22543d;">✅ 今日已拍</span>' : ' <span class="btn-photo-mark" style="display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:#ebf8ff;color:#2b6cb0;border:1px solid #bee3f8;cursor:pointer;" onclick="markPhotoTaken(\'' + escapeHtml(a.card) + '\', this)">📷 标记拍照</span>'))
+              + (_hasPhotoToday(a.card) ? ' <span style="display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;background:#c6f6d5;color:#22543d;">✅ 今日已拍</span>' : ' <span class="btn-photo-mark" style="display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:#ebf8ff;color:#2b6cb0;border:1px solid #bee3f8;cursor:pointer;" onclick="markPhotoTaken(\'' + escapeHtml(a.card) + '\', this)">📷 标记拍照</span>')
               + '</div>';
           });
         }
