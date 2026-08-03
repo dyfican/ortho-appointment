@@ -49,3 +49,21 @@ export function isValidCard(card) {
   if (card.startsWith('H00')) return /^H00[A-Za-z0-9]{12}$/.test(card);
   return false;
 }
+
+// ===== Rule 6: Personal booking link encode/decode =====
+// URL-safe base64 of {n:name, c:card, a:age}. Keep in sync with index.html.
+export function encodePatientLink(n, c, a) {
+  const j = JSON.stringify({ n, c, a: String(a || '') });
+  return btoa(unescape(encodeURIComponent(j)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function decodePatientLink(s) {
+  try {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    const d = JSON.parse(decodeURIComponent(escape(atob(s))));
+    if (!d || typeof d.c !== 'string' || !d.c) return null;
+  return { n: (typeof d.n === 'string' ? d.n : ''), c: d.c, a: String(d.a == null ? '' : d.a) };
+  } catch(e) { return null; }
+}

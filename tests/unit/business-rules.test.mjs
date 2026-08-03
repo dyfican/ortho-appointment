@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { isDone, isTodo, isInTransit, shouldBlockDuplicate, computeIssueTags, needsPhotoReminder } from '../../src/rules.mjs';
+import { isDone, isTodo, isInTransit, shouldBlockDuplicate, computeIssueTags, needsPhotoReminder, encodePatientLink, decodePatientLink } from '../../src/rules.mjs';
 
 describe('完成/待办判定',()=>{
   test('bonded=true->done',()=>assert.equal(isDone({bonded:true,status:'pending'}),true));
@@ -41,4 +41,37 @@ describe('拍照提醒',()=>{
   test('89天->不提醒',()=>assert.equal(needsPhotoReminder('2026-05-04T10:00:00Z',NOW),false));
   test('91天->提醒',()=>assert.equal(needsPhotoReminder('2026-05-02T10:00:00Z',NOW),true));
   test('刚好90天->不提醒',()=>assert.equal(needsPhotoReminder('2026-05-03T10:00:00Z',NOW),false));
+});
+
+describe('专属预约链接',()=>{
+  test('编码解码往返',()=>{
+    const s=encodePatientLink('张三','131123456789012','25');
+    const d=decodePatientLink(s);
+    assert.equal(d.n,'张三');
+    assert.equal(d.c,'131123456789012');
+    assert.equal(d.a,'25');
+  });
+  test('链接字符串URL安全(无+/=)',()=>{
+    const s=encodePatientLink('测试患者','131999999999999','8');
+    assert.equal(/[+/=]/.test(s),false);
+  });
+  test('非法字符串->null',()=>assert.equal(decodePatientLink('!!!garbage!!!'),null));
+  test('缺卡号->null',()=>{
+    const s=btoa(unescape(encodeURIComponent(JSON.stringify({n:'x'})))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    assert.equal(decodePatientLink(s),null);
+  });
+});
+
+describe('链接解码安全',()=>{
+  test('姓名非字符串->规范化为空串',()=>{
+    const s=encodePatientLink(123,'131123456789012','25');
+    const d=decodePatientLink(s);
+    assert.equal(d.n,'');
+    assert.equal(d.c,'131123456789012');
+  });
+  test('卡号非字符串->null',()=>{
+    const j=JSON.stringify({n:'x',c:12345});
+    const s=btoa(unescape(encodeURIComponent(j))).replace(/[+]/g,'-').replace(/[/]/g,'_').replace(/=+$/,'');
+    assert.equal(decodePatientLink(s),null);
+  });
 });
