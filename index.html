@@ -800,15 +800,20 @@
       east:'浦东新区祝桥镇云亭路99号 口腔楼4楼'
     };
 
-    // ===== 双域名容灾（狡兔三窟：同一网站两个入口，一个不通换另一个） =====
-    const MIRROR_HOSTS = ['duan-ortho.top', 'ortho-appointment.pages.dev'];
+    // ===== 多域名容灾（狡兔三窟：同一网站三个入口，一个不通换另一个） =====
+    // base 为各域名部署子路径（GitHub Pages 带项目名子路径）
+    const MIRRORS = [
+      { host: 'duan-ortho.top', base: '/' },
+      { host: 'ortho-appointment.pages.dev', base: '/' },
+      { host: 'dyfican.github.io', base: '/ortho-appointment/' }
+    ];
     function showFallbackBanner() {
       if (document.getElementById('mirrorBanner')) return;
-      const alt = MIRROR_HOSTS.find(h => h !== location.hostname);
+      const alt = MIRRORS.find(m => m.host !== location.hostname);
       const banner = document.createElement('div');
       banner.id = 'mirrorBanner';
       banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#fffbeb;border-bottom:2px solid #f6e05e;padding:10px 14px;font-size:14px;color:#92400e;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.08);';
-      banner.innerHTML = alt ? '⚠️ 当前网络不太稳定，<a href="https://' + alt + location.pathname + location.search + '" style="color:#3182ce;font-weight:600;">点击切换备用通道</a>' : '⚠️ 当前网络不太稳定，请稍后重试';
+      banner.innerHTML = alt ? '⚠️ 当前网络不太稳定，<a href="https://' + alt.host + alt.base + location.search + '" style="color:#3182ce;font-weight:600;">点击切换备用通道</a>' : '⚠️ 当前网络不太稳定，请稍后重试';
       document.body.prepend(banner);
     }
 
