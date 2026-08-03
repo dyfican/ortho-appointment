@@ -1379,15 +1379,13 @@
       if (!isSlotBookable(selectedDate, selectedSlot)) { showToast('已超过今日17:00，不可预约明天上午', 'error'); return; }
       if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
 
-      // 防重复预约：RPC 异常时阻断（不下雪静默跳过），由外层 catch 或本层 return 兜底
+      // 防重复预约：RPC 成功且重复时阻断；RPC 异常时不阻断（校验是辅助，不能因它瘫痪预约）
       const dateStr = formatDate(selectedDate);
       try {
         const isDup = await sbRpc('check_duplicate_booking', { p_card: card });
         if (isDup) { showToast('您已有未来的预约，如需更换日期请先取消后再预约', 'error'); return; }
       } catch(e) {
-        showToast('预约校验失败，请稍后重试', 'error');
-        btn.disabled = false; btn.classList.remove('btn-loading'); btn.textContent = '确认预约';
-        return;
+        console.warn('重复校验不可用，继续预约', e);
       }
 
       // 周六预约频次限制（按年龄比例，仅南部院区）
