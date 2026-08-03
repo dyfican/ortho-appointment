@@ -534,24 +534,29 @@
       <!-- 预约表单 -->
       <div id="bookingForm">
         <div class="form-group">
-          <label>患者姓名</label>
-          <input type="text" id="patientName" placeholder="请输入姓名">
+          <div style="display:grid;grid-template-columns:1fr 96px;gap:8px;">
+            <div>
+              <label>患者姓名</label>
+              <input type="text" id="patientName" placeholder="请输入姓名">
+            </div>
+            <div>
+              <label>年龄</label>
+              <input type="number" id="patientAge" placeholder="年龄" inputmode="numeric" min="1" max="120">
+              <div id="ageHint" style="display:none;font-size:12px;color:#38a169;padding:10px 0;cursor:pointer;" onclick="expandAge()"></div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label>就诊卡号</label>
           <input type="text" id="patientCard" placeholder="请输入卡号（自费卡）" oninput="autoFillAge()">
-        </div>
-        <div class="form-group">
-          <label>年龄</label>
-          <input type="number" id="patientAge" placeholder="请输入年龄" inputmode="numeric" min="1" max="120">
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="isReturnVisit">
           <label for="isReturnVisit">复诊患者</label>
         </div>
         <div class="form-group">
-          <label>备注（选填）</label>
-          <textarea id="patientNote" rows="2" placeholder="特殊需求、过敏史等..."></textarea>
+          <span id="noteToggle" style="font-size:12px;color:#3182ce;cursor:pointer;" onclick="toggleNote()">＋ 备注（选填：过敏史、特殊需求）</span>
+          <textarea id="patientNote" rows="2" placeholder="特殊需求、过敏史等..." style="display:none;margin-top:6px;" oninput="noteEdited()"></textarea>
         </div>
         <div class="form-group" id="returnCampusGroup" style="display:none;">
           <label>加工件返回院区</label>
@@ -795,6 +800,18 @@
       east:'浦东新区祝桥镇云亭路99号 口腔楼4楼'
     };
 
+    // ===== 双域名容灾（狡兔三窟：同一网站两个入口，一个不通换另一个） =====
+    const MIRROR_HOSTS = ['duan-ortho.top', 'ortho-appointment.pages.dev'];
+    function showFallbackBanner() {
+      if (document.getElementById('mirrorBanner')) return;
+      const alt = MIRROR_HOSTS.find(h => h !== location.hostname);
+      const banner = document.createElement('div');
+      banner.id = 'mirrorBanner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#fffbeb;border-bottom:2px solid #f6e05e;padding:10px 14px;font-size:14px;color:#92400e;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.08);';
+      banner.innerHTML = alt ? '⚠️ 当前网络不太稳定，<a href="https://' + alt + location.pathname + location.search + '" style="color:#3182ce;font-weight:600;">点击切换备用通道</a>' : '⚠️ 当前网络不太稳定，请稍后重试';
+      document.body.prepend(banner);
+    }
+
     // ===== 加载数据（Supabase 优先，localStorage 兜底） =====
     async function loadData() {
       // 四个请求并行加载，避免顺序 await 叠加延迟（海外 Supabase 往返慢时尤其明显）
@@ -804,6 +821,9 @@
         sbRpc('get_all_slot_counts'),
         sbFetch('schedule_overrides', { query: '?select=*' })
       ]);
+
+      // 入口容灾：云端请求全部失败（大概率是网络/入口问题），提示切换备用通道
+      if ([rulesRes, holidaysRes, countsRes, overridesRes].every(r => r.status === 'rejected')) showFallbackBanner();
 
       // 规则
       const sbRules = rulesRes.status === 'fulfilled' ? rulesRes.value : null;
@@ -928,7 +948,7 @@
       if (!d) return false;
       document.getElementById('patientName').value = d.n || '';
       document.getElementById('patientCard').value = d.c;
-      if (d.a) document.getElementById('patientAge').value = d.a;
+      if (d.a) { document.getElementById('patientAge').value = d.a; collapseAge(d.a); }
       document.getElementById('isReturnVisit').checked = true;
       try { saveLastPatient(d.n || '', d.c, true, d.a || ''); } catch(e) {}
       return true;
@@ -962,7 +982,7 @@
           document.getElementById('patientName').value = p.name || '';
           document.getElementById('patientCard').value = p.card || '';
           document.getElementById('isReturnVisit').checked = p.isReturn || false;
-          if (p.age) document.getElementById('patientAge').value = p.age;
+          if (p.age) { document.getElementById('patientAge').value = p.age; collapseAge(p.age); }
         }
       } catch(e) {}
     }
@@ -992,7 +1012,7 @@
       }
       document.getElementById('recentSection').style.display = 'block';
       container.innerHTML = list.map(p =>
-        <div class="recent-chip" data-name="" data-card=""></div>
+        `<div class="recent-chip" data-name="${escapeHtml(p.name)}" data-card="${escapeHtml(p.card)}">${escapeHtml(p.name)}</div>`
       ).join('');
     }
 
@@ -1025,7 +1045,44 @@
     function autoFillAge() {
       const card = document.getElementById('patientCard').value.trim();
       const m = getAgeMap();
-      if (card && m[card]) document.getElementById('patientAge').value = m[card];
+      if (card && m[card]) {
+        document.getElementById('patientAge').value = m[card];
+        collapseAge(m[card]);
+      } else if (document.getElementById('ageHint').style.display !== 'none') {
+        // 卡号换了且新卡号无记忆：恢复输入框，不残留上一位的年龄
+        document.getElementById('ageHint').style.display = 'none';
+        document.getElementById('patientAge').style.display = '';
+      }
+    }
+    // 年龄折叠显示：记住的年龄变成一行小字，点击展开修改
+    function collapseAge(age) {
+      if (!age) return;
+      const inp = document.getElementById('patientAge');
+      const hint = document.getElementById('ageHint');
+      if (!inp || !hint) return;
+      inp.style.display = 'none';
+      hint.style.display = 'block';
+      hint.textContent = age + '岁（已记住，点击修改）';
+    }
+    function expandAge() {
+      const inp = document.getElementById('patientAge');
+      const hint = document.getElementById('ageHint');
+      if (!inp || !hint) return;
+      hint.style.display = 'none';
+      inp.style.display = '';
+      inp.focus();
+    }
+    // 备注展开/收起
+    function toggleNote() {
+      const ta = document.getElementById('patientNote');
+      const open = ta.style.display !== 'none';
+      ta.style.display = open ? 'none' : 'block';
+      if (!open) ta.focus();
+    }
+    function noteEdited() {
+      document.getElementById('noteToggle').textContent = document.getElementById('patientNote').value.trim()
+        ? '－ 备注（已填写，点击收起/展开）'
+        : '＋ 备注（选填：过敏史、特殊需求）';
     }
 
     // ===== 规则匹配 =====
@@ -1257,6 +1314,7 @@
     function itMutual() {
       const anyIssue = document.querySelectorAll('.it-issue:checked').length > 0;
       document.getElementById('it_normal').checked = !anyIssue;
+      if (anyIssue) document.getElementById('isReturnVisit').checked = true;
     }
     // 收集问题标签
     function collectIssueTags() {
@@ -1366,7 +1424,7 @@
           showToast('网络异常，已暂存本机，联网后自动同步', 'warn');
           showSuccessModal(appt, true);
           renderCalendar();
-          document.getElementById('patientNote').value = '';
+          document.getElementById('patientNote').value = ''; noteEdited();
           document.getElementById('bookingForm').style.display = 'none';
           document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
           selectedSlot = null;
@@ -1393,7 +1451,7 @@
         renderCalendar();
 
         // 重置表单
-        document.getElementById('patientNote').value = '';
+        document.getElementById('patientNote').value = ''; noteEdited();
         document.getElementById('bookingForm').style.display = 'none';
         document.querySelectorAll('.time-option').forEach(el => el.classList.remove('selected'));
         selectedSlot = null;
