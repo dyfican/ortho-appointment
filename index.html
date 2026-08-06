@@ -1805,8 +1805,14 @@
       } catch(e) { console.error(e); showToast('更新失败', 'error'); }
     }
     function guideToBooking() {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      showToast('请在上方日历选择日期，预约下次复诊时间');
+      // 切换到预约 tab，再滚动到日历
+      switchPatientTab('appt');
+      setTimeout(() => {
+        const cal = document.getElementById('calendar');
+        if (cal) cal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+        showToast('请在日历选择日期，预约下次复诊时间');
+      }, 100);
     }
     async function finishRegistration() {
       if (!currentChecklistId) return;
