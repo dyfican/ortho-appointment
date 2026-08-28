@@ -4,7 +4,9 @@
 //  - 静态资源（图标/manifest/js）：cache-first
 //  - /api/sb/* 与 supabase.co：network-only，绝不缓存（医生端实时看板每次拉最新）
 // 版本号 bump 流程（M5）：每次前端发布改 CACHE 常量 v1->v2... 旧缓存自动清理
-const CACHE = 'ortho-shell-v3';
+// 九正 M2-2：bump v3->v4（admin.html 状态机改造 + 患者总表）
+// 2026-08-29：bump v4->v5（老客户端自动更新：每次发布 bump 版本号，页面侧主动查新+接管后自动刷新）
+const CACHE = 'ortho-shell-v5';
 const SHELL = [
   '/',
   '/index.html',

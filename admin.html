@@ -3270,7 +3270,39 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('SW 注册失败', e); });
+        // updateViaCache:'none'：不走浏览器默认"最长24小时才查一次SW更新"，每次都取最新
+        navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function (reg) {
+          // 从后台切回前台时主动查新版本，用户无需手动清缓存
+          document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) reg.update().catch(function () {});
+          });
+        }).catch(function (e) { console.warn('SW 注册失败', e); });
+
+        // 新版本接管后（controllerchange）自动刷新，永远不见旧壳
+        var hadController = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (!hadController) { hadController = true; return; } // 首次安装接管不是更新，不刷新
+          var last = parseInt(sessionStorage.getItem('swReloaded') || '0', 10);
+          if (Date.now() - last < 5 * 60 * 1000) return;        // 5分钟内已刷新过，防无限循环
+          var ae = document.activeElement;
+          var editing = ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.value;
+          if (editing) { sessionStorage.setItem('swPendingReload', '1'); return; } // 表单填一半，推迟到切回前台再刷
+          sessionStorage.setItem('swReloaded', String(Date.now()));
+          if (typeof showToast === 'function') showToast('检测到新版本，正在更新…');
+          setTimeout(function () { location.reload(); }, 800);
+        });
+        // 补刷：用户输入完毕切回前台时执行之前推迟的刷新
+        document.addEventListener('visibilitychange', function () {
+          if (!document.hidden && sessionStorage.getItem('swPendingReload')) {
+            var ae2 = document.activeElement;
+            if (ae2 && /^(INPUT|TEXTAREA)$/.test(ae2.tagName) && ae2.value) return; // 仍在输入，继续等
+            var last2 = parseInt(sessionStorage.getItem('swReloaded') || '0', 10);
+            if (Date.now() - last2 < 5 * 60 * 1000) { sessionStorage.removeItem('swPendingReload'); return; }
+            sessionStorage.removeItem('swPendingReload');
+            sessionStorage.setItem('swReloaded', String(Date.now()));
+            location.reload();
+          }
+        });
       });
     }
   </script>
