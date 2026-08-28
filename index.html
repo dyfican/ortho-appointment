@@ -849,10 +849,11 @@
 
       // 节假日
       const sbHolidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value : null;
-      if (sbHolidays && sbHolidays.length > 0) {
-        holidays = sbHolidays.map(h => h.date);
-      } else if (holidaysRes.status === 'rejected') {
-        console.warn('Supabase holidays load failed', holidaysRes.reason);
+      if (holidaysRes.status === 'fulfilled') {
+        // 信任云端名单（空列表=医生已清空假日）；只有网络失败才回退内置默认
+        holidays = (sbHolidays || []).map(h => h.date);
+      } else {
+        console.warn('Supabase holidays load failed, 使用内置默认假日', holidaysRes.reason);
       }
 
       // 已约数（不暴露患者隐私，RLS 已禁止直接读 appointments）
@@ -1106,6 +1107,14 @@
       return null;
     }
 
+    // 有效假日判定：在假日名单中，且当天没有“开诊”的手动设置。
+    // 优先级：手动覆盖 > 假日 > 每周排班规则 —— 医生亲手设置的日子以设置为准。
+    function isEffectiveHoliday(dateStr) {
+      if (!holidays.includes(dateStr)) return false;
+      const ov = schedule[dateStr];
+      return !(ov && (ov.am.enabled || ov.pm.enabled));
+    }
+
     function getDaySchedule(date) {
       const key = getDateKey(date);
       if (schedule[key]) return schedule[key];
@@ -1188,7 +1197,7 @@
         const ds = getDaySchedule(date);
         const dateStr = getDateKey(date);
         const isToday = date.getTime() === today.getTime();
-        const isHol = holidays.includes(dateStr);
+        const isHol = isEffectiveHoliday(dateStr);
         const hasSchedule = ds.am.enabled || ds.pm.enabled;
         // 只允许预约今天起 2 个月内的日期
         const twoMonthsLater = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
@@ -1372,6 +1381,7 @@
       const twoMonthsLater = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
       if (selectedDate < today) { showToast('不能预约过去的日期', 'error'); return; }
       if (selectedDate > twoMonthsLater) { showToast('只能预约2个月内的日期', 'error'); return; }
+      if (isEffectiveHoliday(formatDate(selectedDate))) { showToast('该日期为假日，不可预约', 'error'); return; }
 
       const ds = getDaySchedule(selectedDate);
       const cfg = ds[selectedSlot];

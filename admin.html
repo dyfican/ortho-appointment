@@ -661,6 +661,13 @@
       .scan-hdinfo { width:100%; margin-left:0; margin-top:4px; }
       .scan-list .qr-wrap .qr { width:76px; height:76px; }
     }
+    /* ===== 九正 M2-2：患者总表 ===== */
+    .pt-table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06); font-size:13px; }
+    .pt-table th, .pt-table td { padding:9px 12px; text-align:left; border-bottom:1px solid #edf2f7; }
+    .pt-table th { background:#f7fafc; color:#4a5568; font-weight:600; white-space:nowrap; }
+    .pt-table tr:hover td { background:#f7fafc; }
+    .pt-arch-toggle { font-size:13px; color:#4a5568; display:flex; align-items:center; gap:4px; }
+    .pt-count { margin-top:10px; font-size:12px; color:#718096; }
 </style>
     <link rel="manifest" href="manifest-admin.webmanifest">
     <link rel="apple-touch-icon" href="icon-staff-192.png">
@@ -692,6 +699,7 @@
         <button class="sb-item" id="navSched" data-board="sched" onclick="switchBoard('sched')">⚙️ 排班看板</button>
         <button class="sb-item" id="navScan" data-board="scan" onclick="switchBoard('scan')" style="display:none">📷 扫码录入</button>
         <button class="sb-item" data-board="notices" onclick="switchBoard('notices')">📖 须知管理</button>
+        <button class="sb-item" id="navPatients" data-board="patients" onclick="switchBoard('patients')" ${IS_STAFF?'style="display:none"':''}>👥 患者总表</button>
       </nav>
       <div class="sb-footer">
         <button class="sb-mini" id="navExport" onclick="exportData()">📤 导出备份</button>
@@ -792,6 +800,31 @@
           <button class="btn-green" onclick="showNoticeEditor()">➕ 新建须知</button>
         </div>
         <div id="noticeList"><div class="empty-state">加载中…</div></div>
+      </div>
+      <!-- 九正 M2-2：患者总表（医生专属，staff 隐藏；patient_master 服务端对 staff 隔离） -->
+      <div id="page-patients" class="board-page">
+        <div class="page-head"><h2>患者总表</h2>
+          <div class="filter-bar">
+            <input id="ptSearch" class="search-box" type="text" placeholder="搜索姓名/卡号" oninput="onPtSearch()">
+            <select id="ptStage" onchange="renderPatientsBoard()">
+              <option value="">全部阶段</option>
+              <option value="registered">登记</option>
+              <option value="checking">检查中</option>
+              <option value="check_done">检查完成</option>
+              <option value="planning">方案中</option>
+              <option value="plan_done">方案完成</option>
+              <option value="plan_communicated">已沟通</option>
+              <option value="aligner_sent">已送件</option>
+              <option value="aligner_received">已收件</option>
+              <option value="bonded">已佩戴</option>
+              <option value="followup">复诊中</option>
+              <option value="archived">已归档</option>
+              <option value="canceled">已取消</option>
+            </select>
+            <label class="pt-arch-toggle"><input type="checkbox" id="ptShowArchived" checked onchange="renderPatientsBoard()"> 含已归档</label>
+          </div>
+        </div>
+        <div id="patientsBoardContent"><div class="empty-state">加载中…</div></div>
       </div>
     </div>
   </div>
@@ -901,7 +934,7 @@
   <div class="modal-overlay" id="holidayModal">
     <div class="modal" style="max-width:500px;">
       <h3>节假日管理</h3>
-      <p class="note-text" style="margin-bottom:10px;">以下日期将被标记为节假日，可手动添加或删除。</p>
+      <p class="note-text" style="margin-bottom:10px;">添加=当天停诊；删除=恢复开诊（有排班规则的按规则自动开放，无规则的请到日历手动设置）。</p>
       <div class="form-group">
         <label>添加节假日</label>
         <input type="date" id="newHolidayDate">
@@ -1074,7 +1107,7 @@
       t.id = 'adminToast';
       t.textContent = message;
       t.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:99999;padding:12px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,0.15);max-width:90vw;text-align:center;'
-        + (type === 'error' ? 'background:#e53e3e;color:#fff;' : 'background:#38a169;color:#fff;');
+        + (type === 'error' ? 'background:#e53e3e;color:#fff;' : type === 'warn' ? 'background:#dd6b20;color:#fff;' : 'background:#38a169;color:#fff;');
       document.body.appendChild(t);
       setTimeout(() => t.remove(), 2200);
     }
@@ -2127,17 +2160,48 @@
       if (!holidays.includes(d)) {
         holidays.push(d);
         holidays.sort();
+        // 加假日=当天停诊：同步写停诊覆盖，确保假日必定生效（不被旧的手动开诊设置顶掉）
+        schedule[d] = { am:{enabled:false,location:null,maxSlot:0}, pm:{enabled:false,location:null,maxSlot:0} };
+        syncScheduleOverrides([d]).then(ok => {
+          if (!ok) showToast('停诊设置同步失败，患者端可能仍可预约该假日，请检查网络后重试', 'error');
+        });
         saveData();
         renderHolidayList();
         renderCalendar();
       }
     }
 
-    function removeHoliday(d) {
+    async function removeHoliday(d) {
       holidays = holidays.filter(h => h !== d);
+      // 假日表受数据库权限限制无法真删，改由“开诊覆盖”抵消假日效果（手动覆盖 > 假日）
+      const ok = await openHolidayDate(d);
+      if (ok === false) showToast('开诊设置同步失败，患者端可能仍显示为假日，请检查网络后重试', 'error');
       saveData();
       renderHolidayList();
       renderCalendar();
+    }
+
+    // 开放原假日：按当天星期匹配的排班规则写入开诊覆盖；无规则且无既有设置时提示去日历手动排班
+    async function openHolidayDate(d) {
+      const date = new Date(d + 'T00:00:00');
+      const rule = matchRule(date);
+      let ds = null;
+      if (rule) {
+        ds = {
+          am:{enabled:rule.amEnabled,location:rule.location,maxSlot:rule.amMax},
+          pm:{enabled:rule.pmEnabled,location:rule.location,maxSlot:rule.pmMax}
+        };
+      } else if (schedule[d] && (schedule[d].am.enabled || schedule[d].pm.enabled)) {
+        ds = schedule[d];  // 已有手动开诊设置，直接用
+      }
+      if (!ds || (!ds.am.enabled && !ds.pm.enabled)) {
+        showToast('该日期无排班规则，请在日历上点击该日期手动设置排班', 'warn');
+        return;
+      }
+      schedule[d] = ds;
+      const ok = await syncScheduleOverrides([d]);
+      renderCalendar();
+      return ok;
     }
 
     // ===== 设置标签页 =====
@@ -2219,7 +2283,11 @@
             }
           });
         }
-      } catch(e) { console.error('Sync schedule overrides to Supabase failed', e); }
+        return true;
+      } catch(e) {
+        console.error('Sync schedule overrides to Supabase failed', e);
+        return false;
+      }
     }
 
     // ===== 保存单条预约到 Supabase =====
@@ -2307,7 +2375,7 @@
             return_campus: c.return_campus, appointment_id: c.appointment_id,
             appointment_date: c.appointment_date, appointment_slot: c.appointment_slot,
             sent: c.sent, received: c.received, bonded: c.bonded,
-            status: c.status, created_at: c.created_at, completed_at: c.completed_at
+            status: c.status, workflow_stage: c.workflow_stage, created_at: c.created_at, completed_at: c.completed_at
           }));
         }
       } catch(e) { console.warn('checklists load failed', e); }
@@ -2439,6 +2507,7 @@
       return checklists.some(cl =>
         (normCard(cl.patient_card) === normCard(card) || normCard(cl.patient_name) === normCard(name))
         && !cl.bonded && cl.status !== 'cancel'
+        && cl.workflow_stage !== 'canceled' && cl.workflow_stage !== 'archived'
       );
     }
     // 返回某人所有待办类型集合（new_patient/broken/restart），用于预约看板标注「待办是什么内容」
@@ -2446,7 +2515,9 @@
       const types = new Set();
       checklists.forEach(cl => {
         if ((normCard(cl.patient_card) === normCard(card) || normCard(cl.patient_name) === normCard(name))
-            && !cl.bonded && cl.status !== 'cancel' && cl.checklist_type) {
+            && !cl.bonded && cl.status !== 'cancel'
+            && cl.workflow_stage !== 'canceled' && cl.workflow_stage !== 'archived'
+            && cl.checklist_type) {
           types.add(cl.checklist_type);
         }
       });
@@ -2478,6 +2549,54 @@
       const dis = saving ? ' disabled' : '';
       const bodyStr = JSON.stringify(bodyObj).replace(/"/g, "'");
       return '<button class="' + cls + '"' + dis + ' onclick="patchChecklistField(\'' + clId + '\',' + bodyStr + ')">' + label + (saving ? ' \u00b7\u4fdd\u5b58\u4e2d' : '') + '</button>';
+    }
+    // ===== 九正 M2-2：状态推进（走 advance_workflow RPC，白名单校验 + 角色权限 + 原子双写）=====
+    // 幂等路径推进：自动补中间态（RPC 同态幂等 200，已过步骤安全跳过），目标态到即止
+    const STAGE_PATHS = {
+      check_done: ['checking', 'check_done'],
+      plan_done: ['checking', 'check_done', 'planning', 'plan_done'],
+      plan_communicated: ['checking', 'check_done', 'planning', 'plan_done', 'plan_communicated'],
+      restart_design: ['planning', 'plan_done'],
+    };
+    async function advanceStagePath(card, target, label, silent, currentHint) {
+      if (!card || card === 'pending') { if (!silent) showToast('该患者未关联卡号，无法推进状态', 'error'); return; }
+      const path = STAGE_PATHS[target] || [target];
+      // 查当前态（patient_master.current_stage 权威；staff 403 读不到时退卡内 hint 兜底）
+      let cur = currentHint || null;
+      try {
+        const m = await sbFetch('patient_master', { query: '?select=current_stage&patient_card=eq.' + encodeURIComponent(card) });
+        if (m && m[0] && m[0].current_stage) cur = m[0].current_stage;
+      } catch (e) { /* staff 403：用 hint */ }
+      // 旧枚举归一化（存量 designed/communicated → 新枚举，防倒退 422）
+      const NORM = { designed: 'plan_done', communicated: 'plan_communicated' };
+      if (cur && NORM[cur]) cur = NORM[cur];
+      const curIdx = cur ? path.indexOf(cur) : -1;
+      const tIdx = path.indexOf(target);
+      // 已到/超过目标：no-op 成功（master 领先渲染态的瞬时不同步兜底）
+      if (curIdx >= 0 && tIdx >= 0 && curIdx >= tIdx) {
+        if (!silent) showToast(label + '成功');
+        loadData();
+        renderTodoBoard();
+        return;
+      }
+      const steps = curIdx >= 0 ? path.slice(curIdx + 1) : path;
+      for (const s of steps) {
+        try {
+          const r = await sbFetch('advance_workflow', { method: 'POST', body: { patient_card: card, target_stage: s } });
+          const rOk = r && (r.ok === true || (Array.isArray(r) && r[0] && r[0].ok === true));
+          if (!rOk) throw new Error((r && r.error) || '推进被拒绝');
+        } catch (e) {
+          if (!silent) showToast('推进失败：' + (e.message || '网络错误'), 'error');
+          return;
+        }
+      }
+      if (!silent) showToast(label + '成功');
+      loadData();          // 重拉数据（含 workflow_stage/status 双写结果）
+      renderTodoBoard();   // 立即按新状态重排，不等 autoSync（≤30s 自愈）
+    }
+    function stageBtn(card, target, label, cls, curHint) {
+      // data-card/data-cur 属性承载（HTML 属性上下文安全转义）；onclick 经 dataset 读取，防注入
+      return '<button class="' + cls + '" type="button" data-card="' + escapeHtml(card || '') + '" data-cur="' + escapeHtml(curHint || '') + '" data-target="' + target + '" data-label="' + label + '" onclick="advanceStagePath(this.dataset.card, this.dataset.target, this.dataset.label, false, this.dataset.cur)">' + label + '</button>';
     }
     function markBtn(clId, label) {
       const saving = savingIds.has(clId);
@@ -2519,7 +2638,7 @@
           return_campus: r.return_campus, appointment_id: r.appointment_id,
           appointment_date: r.appointment_date, appointment_slot: r.appointment_slot,
           sent: r.sent, received: r.received, bonded: r.bonded,
-          status: r.status, created_at: r.created_at, completed_at: r.completed_at
+          status: r.status, workflow_stage: r.workflow_stage, created_at: r.created_at, completed_at: r.completed_at
         };
         const exist = checklists.find(x => x.id === r.id);
         if (!exist) { checklists.push(norm); changed.push(r.id); }
@@ -2553,6 +2672,10 @@
         const r = await sbFetch('checklists', { method: 'PATCH', query: `?id=eq.${id}`, body: { bonded: true } });
         if (r === null) throw new Error('同步失败');
         showToast('已标记为佩戴矫治器');
+        // 九正：尽力同步状态机（bonded 布尔驱动三看板，状态机驱动患者总表；静默，失败不影响看板）
+        if (cl.patient_card && cl.patient_card !== 'pending') {
+          advanceStagePath(cl.patient_card, 'bonded', '佩戴完成', true, cl.workflow_stage);
+        }
       } catch(e) {
         cl.bonded = prevBonded;         // 回滚
         showToast('标记失败：' + (e && e.message ? e.message : '网络错误'), 'error');
@@ -2593,14 +2716,14 @@
         if (isApptVisible()) renderApptDayList();
       }
     }
-    // 统一阶段标识（供搜索/筛选/排序）
+    // 统一阶段标识（供搜索/筛选/排序；兼容九正新枚举与存量旧值 designed/communicated）
     function stageOf(cl) {
       if (cl.bonded) return 'bonded';
-      if (cl.checklist_type === 'new_patient') {
-        if (cl.workflow_stage === 'communicated') return 'communicated';
-        if (cl.workflow_stage === 'designed') return 'designed';
-        return 'new';
-      }
+      const wf = cl.workflow_stage || '';
+      if (wf === 'plan_communicated' || wf === 'communicated') return 'communicated';
+      if (wf === 'plan_done' || wf === 'designed') return 'designed';
+      if (wf === 'aligner_sent') return 'sent';
+      if (wf === 'aligner_received') return 'received';
       if (cl.checklist_type === 'broken') {
         if (cl.received) return 'received';
         if (cl.sent) return 'sent';
@@ -2608,7 +2731,7 @@
       }
       if (cl.checklist_type === 'restart') {
         if (cl.received) return 'received';
-        if (cl.workflow_stage === 'designed') return 'designed';
+        if (wf === 'plan_done' || wf === 'designed') return 'designed';
         return 'new';
       }
       return 'new';
@@ -2651,16 +2774,24 @@
             + '</div>';
         }
         const wf = cl.workflow_stage || '';
-        // 阶段按钮智能显示：已完成步骤替换为标签，未完成按钮可点击
+        // 阶段按钮（九正 M2-2：走 advance_workflow，自动补中间态；按当前态收窄按钮，杜绝倒退 422）
         const stageBtns = [];
-        if (wf === 'communicated') {
+        if (wf === 'archived') {
+          stageBtns.push('<span class="chk-tag done">✓ 已归档</span>');
+        } else if (wf === 'canceled') {
+          stageBtns.push('<span class="chk-tag todo">已取消</span>');
+        } else if (wf === 'plan_communicated' || wf === 'communicated') {
           stageBtns.push('<span class="chk-tag done">✓ 已沟通</span>');
-        } else if (wf === 'designed') {
+        } else if (wf === 'plan_done' || wf === 'designed') {
           stageBtns.push('<span class="chk-tag done">✓ 已设计</span>');
-          stageBtns.push(actBtn(cl.id, 'btn-mini-blue', '方案沟通完成', {workflow_stage:'communicated',status:'completed'}));
-        } else {
-          stageBtns.push(actBtn(cl.id, 'btn-mini-blue', '完成方案设计', {workflow_stage:'designed'}));
-          stageBtns.push(actBtn(cl.id, 'btn-mini-blue', '方案沟通完成', {workflow_stage:'communicated',status:'completed'}));
+          stageBtns.push(stageBtn(cl.patient_card, 'plan_communicated', '方案沟通完成', 'btn-mini-blue', wf));
+        } else if (wf === 'planning') {
+          stageBtns.push(stageBtn(cl.patient_card, 'plan_done', '完成方案设计', 'btn-mini-blue', wf));
+          stageBtns.push(stageBtn(cl.patient_card, 'plan_communicated', '方案沟通完成', 'btn-mini-blue', wf));
+        } else { // '' / checking / check_done（含存量 null）
+          if (wf !== 'check_done') stageBtns.push(stageBtn(cl.patient_card, 'check_done', '检查完成', 'btn-mini-gray', wf));
+          stageBtns.push(stageBtn(cl.patient_card, 'plan_done', '完成方案设计', 'btn-mini-blue', wf));
+          stageBtns.push(stageBtn(cl.patient_card, 'plan_communicated', '方案沟通完成', 'btn-mini-blue', wf));
         }
         const proc = `<div class="todo-proc">${stageBtns.join('\n')}</div>`;
         return `<div class="todo-item" style="border-left-color:${typeBorderColor}" data-clid="${cl.id}">
@@ -2687,7 +2818,7 @@
       }
       // 隐形重启：重启设计 + 收件 + 佩戴
       const rproc = [];
-      rproc.push('重启设计：' + (cl.workflow_stage === 'designed' ? '已完成' : '未开始'));
+      rproc.push('重启设计：' + (cl.workflow_stage === 'designed' || cl.workflow_stage === 'plan_done' ? '已完成' : '未开始'));
       rproc.push('加工件签收：' + (cl.received ? '已签收' : '未签收'));
       return `<div class="todo-item" style="border-left-color:${typeBorderColor}" data-clid="${cl.id}">
         <div class="todo-head"><b>${eName}</b> <span class="todo-card">${eCard}</span>
@@ -2695,7 +2826,7 @@
           ${markBtn(cl.id, '佩戴完成')}</div>
         <div class="todo-meta">${meta.join(' · ')}</div>
         <div class="todo-proc">${rproc.join(' · ')}
-          ${cl.workflow_stage==='designed' ? '<span class="chk-tag done">✓ 已设计</span>' : actBtn(cl.id, 'btn-mini-blue', '完成重启设计', {workflow_stage:'designed'})}
+          ${cl.workflow_stage==='designed' || cl.workflow_stage==='plan_done' ? '<span class="chk-tag done">✓ 已设计</span>' : stageBtn(cl.patient_card, 'restart_design', '完成重启设计', 'btn-mini-blue', cl.workflow_stage)}
           ${cl.received ? '<span class="chk-tag done">✓ 已收件</span>' : actBtn(cl.id, 'btn-mini-blue', '完成收件', {received:true})}
         </div></div>`;
     }
@@ -2722,15 +2853,18 @@
       let list;
       let isDone = false;
       if (todoTab === 'done') {
-        // 完成栏：已佩戴矫治器 或 初诊"方案沟通完成"(status=completed) 都算完成
-        list = checklists.filter(cl => (cl.bonded || cl.status === 'completed') && cl.status !== 'cancel');
+        // 完成栏：已佩戴矫治器 或 初诊"方案沟通完成"(status=completed) 或 已归档，都算完成
+        list = checklists.filter(cl => (cl.bonded || cl.status === 'completed' || cl.workflow_stage === 'archived')
+          && cl.status !== 'cancel' && cl.workflow_stage !== 'canceled');
         isDone = true;
       } else if (todoTab === 'transit') {
         // 加工件在途看板：已送件未签收
-        list = checklists.filter(cl => cl.sent && !cl.received && cl.status !== 'cancel');
+        list = checklists.filter(cl => cl.sent && !cl.received && cl.status !== 'cancel'
+          && cl.workflow_stage !== 'canceled' && cl.workflow_stage !== 'archived');
       } else {
-        // 待办栏：未佩戴 且 未完成（初诊沟通完成后不再出现在待办）
-        list = checklists.filter(cl => !cl.bonded && cl.status !== 'completed' && cl.status !== 'cancel');
+        // 待办栏：未佩戴 且 未完成（初诊沟通完成后不再出现在待办；取消/归档不出现）
+        list = checklists.filter(cl => !cl.bonded && cl.status !== 'completed' && cl.status !== 'cancel'
+          && cl.workflow_stage !== 'canceled' && cl.workflow_stage !== 'archived');
         if (todoTab === 'today') {
           // 当日：按有效日期 == 今天（优先 appointment_date，缺失回退 created_at）
           list = list.filter(cl => effDate(cl) === todayStr);
@@ -2989,6 +3123,75 @@
       document.body.style.overflow = '';
     }
 
+    // ===== 九正 M2-2：患者总表（医生专属） =====
+    let patientMaster = [];
+    let apptIndex = {}; // patient_card -> 最近预约（date 降序取最新）
+    const STAGE_LABEL = { registered:'登记', checking:'检查中', check_done:'检查完成', planning:'方案中',
+      plan_done:'方案完成', plan_communicated:'已沟通', aligner_sent:'已送件', aligner_received:'已收件',
+      bonded:'已佩戴', broken_cycle:'破损返修', restart_cycle:'重启中', followup:'复诊中',
+      archived:'已归档', canceled:'已取消' };
+    function stageLabel(s) { return STAGE_LABEL[s] || (s || '—'); }
+    async function loadPatientsBoard() {
+      const el = document.getElementById('patientsBoardContent');
+      if (!el) return;
+      el.innerHTML = '<div class="empty-state">加载中…</div>';
+      try {
+        const [pms, appts] = await Promise.all([
+          sbFetch('patient_master', { query: '?select=*&order=created_at.asc' }),
+          sbFetch('appointments', { query: '?select=patient_card,date,status,issue_tags&order=date.desc' }),
+        ]);
+        patientMaster = Array.isArray(pms) ? pms : [];
+        apptIndex = {};
+        for (const a of (Array.isArray(appts) ? appts : [])) {
+          if (!a.patient_card) continue;
+          const prev = apptIndex[a.patient_card];
+          if (!prev || (a.date || '') > (prev.date || '')) apptIndex[a.patient_card] = a;
+        }
+        renderPatientsBoard();
+      } catch (e) {
+        el.innerHTML = '<div class="empty-state">加载失败：' + escapeHtml(e.message || '网络错误') + '</div>';
+      }
+    }
+    function renderPatientsBoard() {
+      const el = document.getElementById('patientsBoardContent');
+      if (!el) return;
+      const q = ((document.getElementById('ptSearch') && document.getElementById('ptSearch').value) || '').trim().toLowerCase();
+      const st = (document.getElementById('ptStage') && document.getElementById('ptStage').value) || '';
+      const showArch = !document.getElementById('ptShowArchived') || document.getElementById('ptShowArchived').checked;
+      const rows = patientMaster.filter(pm => {
+        const stg = pm.current_stage || '';
+        const archived = pm.archive_status === 'archived' || stg === 'archived';
+        if (!showArch && archived) return false;
+        if (st && stg !== st) return false;
+        if (q) {
+          const hay = ((pm.patient_name || '') + ' ' + (pm.patient_card || '')).toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+      if (rows.length === 0) {
+        el.innerHTML = '<div class="empty-state">无匹配患者</div>';
+        return;
+      }
+      el.innerHTML = '<table class="pt-table"><thead><tr><th>姓名</th><th>卡号</th><th>当前阶段</th><th>最近预约</th><th>自述标签</th><th>归档</th></tr></thead><tbody>'
+        + rows.map(pm => {
+          const a = apptIndex[pm.patient_card] || {};
+          const stg = pm.current_stage || '';
+          const archived = pm.archive_status === 'archived' || stg === 'archived';
+          const tags = (a.issue_tags || '');
+          return '<tr>'
+            + '<td>' + escapeHtml(pm.patient_name || '') + '</td>'
+            + '<td>' + escapeHtml(pm.patient_card || '') + '</td>'
+            + '<td>' + stageLabel(stg) + '</td>'
+            + '<td>' + escapeHtml((a.date || '').slice(0, 10)) + (a.status === 'cancel' ? '（已取消）' : '') + '</td>'
+            + '<td>' + escapeHtml(tags) + '</td>'
+            + '<td>' + (archived ? '已归档' + (pm.nas_slot ? '（槽位 ' + escapeHtml(pm.nas_slot) + '）' : '') : '—') + '</td>'
+            + '</tr>';
+        }).join('')
+        + '</tbody></table><div class="pt-count">共 ' + rows.length + ' 位患者</div>';
+    }
+    function onPtSearch() { renderPatientsBoard(); }
+
     // ===== 须知管理 CRUD =====
     let notices = [];
     async function renderNoticeList() {
@@ -3050,6 +3253,7 @@
       else if (name === 'todo') { renderTodoBoard(); }
       else if (name === 'scan') { const d = document.getElementById('scanSelDate'); if (d && !d.value) d.value = scanTodayStr(); loadScan(); }
       else if (name === 'notices') { renderNoticeList(); }
+      else if (name === 'patients') { loadPatientsBoard(); }
     }
     // ===== 初始化 =====
     (async () => {
