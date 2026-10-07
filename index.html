@@ -182,10 +182,14 @@
       background: #fff5f5;
     }
     .time-option.closed {
-      opacity: 0.4;
       cursor: not-allowed;
       background: #f7fafc;
     }
+
+    /* 只压暗文字，⏰ 截止原因必须看得清（父级 opacity 会把提示一起抹掉） */
+    .time-option.closed .time-label,
+    .time-option.closed .time-loc { color: #a0aec0; }
+    .time-option.closed .time-addr { color: #c53030; }
     .time-option .time-label {
       font-size: 15px;
       font-weight: 600;
@@ -204,18 +208,28 @@
       line-height: 1.3;
     }
 
-    /* Deadline warning */
-    .deadline-warning {
-      background: #fff5f5;
-      border: 1px solid #feb2b2;
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 13px;
-      color: #c53030;
-      display: none;
-      margin-bottom: 12px;
-    }
-    .deadline-warning.show { display: block; }
+    /* 唯一的就诊建议槽：一次只出一条，颜色即语气（红=真阻断，琥珀=为你好，绿=选对了）*/
+    .advisory { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.75; display: none; margin-bottom: 12px; }
+    .advisory.block { display: block; background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; }
+    .advisory.warm  { display: block; background: #fffbeb; border: 1px solid #f6e05e; color: #92400e; }
+    .advisory.good  { display: block; background: #f0fff4; border: 1px solid #9ae6b4; color: #22543d; }
+    .quiet-btn { margin: 5px 6px 0 0; padding: 5px 11px; font-size: 12.5px; border: 1px solid #cbd5e0; border-radius: 14px; background: #fff; color: #0b5c9e; cursor: pointer; }
+
+    /* 这次要做（选填）*/
+    .purpose-row { margin-bottom: 10px; }
+    .purpose-label { font-size: 12px; color: #718096; display: block; margin-bottom: 5px; }
+    .purpose-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .purpose-chip { padding: 5px 12px; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; color: #4a5568; cursor: pointer; }
+    .purpose-chip.selected { border-color: #0984e3; background: #e7f3fe; color: #0b5c9e; font-weight: 600; }
+
+    /* 下次预约卡片（省去查询）*/
+    .next-appt { padding: 12px 14px; }
+    .next-appt .na-line { font-size: 14px; font-weight: 600; color: #2d3748; }
+    .next-appt .na-sub { font-size: 12px; color: #718096; margin-top: 3px; }
+    .next-appt .na-btns { display: flex; gap: 8px; margin-top: 9px; }
+    .next-appt .na-btns button { flex: 1; padding: 7px 0; font-size: 13px; border-radius: 6px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; }
+    .next-appt .na-cancel { color: #c53030; border-color: #feb2b2; }
+    .next-appt .na-move { color: #0b5c9e; border-color: #90cdf4; }
 
     /* Form */
     .form-group { margin-bottom: 14px; }
@@ -486,6 +500,21 @@
     <!-- Tab 1: 预约复诊（默认） -->
     <div class="tab-content active" data-content="appt">
 
+    <!-- 下次预约（识别卡号后自动出现，不用再去查询）-->
+    <div class="card next-appt" id="nextApptCard" style="display:none;"></div>
+
+    <!-- 这次要做（选填）：只用来判断是否需要更宽松的时间，不选就什么都不变 -->
+    <div class="purpose-row">
+      <span class="purpose-label">这次要做（选填）</span>
+      <div class="purpose-chips" id="purposeChips">
+        <button type="button" class="purpose-chip" data-purpose="常规复诊" onclick="setPurpose('常规复诊')">常规复诊</button>
+        <button type="button" class="purpose-chip" data-purpose="拆托槽" onclick="setPurpose('拆托槽')">拆托槽</button>
+        <button type="button" class="purpose-chip" data-purpose="粘接托槽" onclick="setPurpose('粘接托槽')">粘接托槽</button>
+        <button type="button" class="purpose-chip" data-purpose="隐形首次佩戴" onclick="setPurpose('隐形首次佩戴')">隐形首次佩戴</button>
+        <button type="button" class="purpose-chip" data-purpose="初诊" onclick="setPurpose('初诊')">初诊</button>
+      </div>
+    </div>
+
     <!-- 日历 -->
     <div class="card">
       <div class="calendar-header">
@@ -507,9 +536,6 @@
       <div class="card-title">
         <span id="selectedDateText"></span>
       </div>
-      <div class="deadline-warning" id="deadlineWarning">
-        今日17:00后，不可预约明天上午
-      </div>
       <div class="time-selector" id="timeSelector">
         <div class="time-option" data-slot="am" onclick="selectSlot('am')">
           <div class="time-label">上午</div>
@@ -522,6 +548,9 @@
           <div class="time-addr" id="pmAddr"></div>
         </div>
       </div>
+
+      <!-- 唯一的建议槽：截止 / 长操作改期 / 选对了 / 高峰提醒 -->
+      <div class="advisory" id="advisoryBar"></div>
 
       <!-- 最近患者 -->
       <div id="recentSection" style="display:none;">
@@ -548,7 +577,7 @@
         </div>
         <div class="form-group">
           <label>就诊卡号</label>
-          <input type="text" id="patientCard" placeholder="请输入卡号（自费卡）" oninput="autoFillAge()">
+          <input type="text" id="patientCard" placeholder="请输入卡号（自费卡）" oninput="onCardInput()">
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="isReturnVisit">
@@ -709,35 +738,53 @@
     // ===== Supabase 配置 =====
     const SB_URL = 'https://bdfwzfwgjtqjbouutlnd.supabase.co';
     const SB_KEY = 'sb_publishable_sCup7QMIEVdad6Lo22hP7g_lTqs-viR';
+    // 中转通道：优先走同源 Cloudflare Pages Function 代理（/api/sb/…），由边缘节点代取海外数据库，
+    // 根治国内患者直连 supabase.co 被跨境网络拖挂导致的白屏。GitHub Pages 备用站无函数，仅该站回退直连。
+    const USE_PROXY = !/github\.io$/i.test(location.hostname);
+    const NET_TIMEOUT_MS = 8000; // 单请求超时上限：到点强制中止，绝不让 Promise 永远悬挂
+
+    // 带超时的 fetch：abort 覆盖"请求+响应体读取"全过程（consume 回调在计时器存活期内执行），
+    // 超时/断网都会 reject，使 Promise.allSettled 能 settle，日历不会卡在"加载中"
+    async function fetchWithTimeout(url, options, consume) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), NET_TIMEOUT_MS);
+      try {
+        const resp = await fetch(url, Object.assign({}, options, { signal: ctrl.signal }));
+        return consume ? await consume(resp) : resp;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
 
     // Supabase REST 请求封装
     async function sbFetch(table, opts = {}) {
-      const url = `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
+      const url = USE_PROXY ? `/api/sb/${table}${opts.query || ''}` : `${SB_URL}/rest/v1/${table}${opts.query || ''}`;
       // 防缓存：用标准请求头 Cache-Control，避免像 ?_t= 那样被 PostgREST 当 filter 解析报 PGRST100
-      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Cache-Control': 'no-cache' };
+      const headers = { 'Cache-Control': 'no-cache' };
+      if (!USE_PROXY) { headers['apikey'] = SB_KEY; headers['Authorization'] = `Bearer ${SB_KEY}`; }
       if (opts.method === 'POST' || opts.method === 'PATCH') {
         headers['Content-Type'] = 'application/json';
-        // RLS 加固后：anon 对 appointments 表 SELECT 策略为空，
-        // return=representation 会被 RLS 拒绝，因此用 return=minimal 提交成功后不返回行。
-        headers['Prefer'] = 'return=minimal';
+        // 默认 return=minimal（提交成功不回表，兼容 appointments 的 RLS）；需要回读 id 的调用传 opts.prefer 覆盖
+        headers['Prefer'] = opts.prefer || 'return=minimal';
       }
-      const resp = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
-      if (!resp.ok) throw new Error(`Supabase ${table} error: ${resp.status}`);
-      if (opts.method === 'DELETE') return null;
-      const text = await resp.text();
-      return text ? JSON.parse(text) : null;
+      return fetchWithTimeout(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined }, async (resp) => {
+        if (!resp.ok) throw new Error(`Supabase ${table} error: ${resp.status}`);
+        if (opts.method === 'DELETE') return null;
+        const text = await resp.text();  // 响应体读取同样受超时中断约束
+        return text ? JSON.parse(text) : null;
+      });
     }
 
     // ===== RPC 调用（绕过 RLS，只返回必要数据，不泄露他人隐私） =====
     async function sbRpc(funcName, params = {}) {
-      // 注意：RPC 端点（POST /rest/v1/rpc/...）不接收额外 query 参数，
-      // 加 ?_t= 会被 PostgREST 当成 filter 报错（PGRST100），导致所有 RPC 失败。
-      // POST 请求本身不被浏览器/代理缓存，因此 RPC 不需要也不加 cache-buster。
-      const url = `${SB_URL}/rest/v1/rpc/${funcName}`;
-      const headers = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
-      const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(params) });
-      if (!resp.ok) throw new Error(`RPC ${funcName} error: ${resp.status}`);
-      return resp.json();
+      // RPC 走 POST，浏览器/代理不缓存，无需 cache-buster；端点不接收额外 query 参数
+      const url = USE_PROXY ? `/api/sb/rpc/${funcName}` : `${SB_URL}/rest/v1/rpc/${funcName}`;
+      const headers = { 'Content-Type': 'application/json' };
+      if (!USE_PROXY) { headers['apikey'] = SB_KEY; headers['Authorization'] = `Bearer ${SB_KEY}`; }
+      return fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(params) }, async (resp) => {
+        if (!resp.ok) throw new Error(`RPC ${funcName} error: ${resp.status}`);
+        return resp.json();  // 响应体读取同样受超时中断约束
+      });
     }
 
     // ===== 与医生端共用数据 =====
@@ -813,7 +860,7 @@
       const banner = document.createElement('div');
       banner.id = 'mirrorBanner';
       banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#fffbeb;border-bottom:2px solid #f6e05e;padding:10px 14px;font-size:14px;color:#92400e;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.08);';
-      banner.innerHTML = alt ? '⚠️ 当前网络不太稳定，<a href="https://' + alt.host + alt.base + location.search + '" style="color:#3182ce;font-weight:600;">点击切换备用通道</a>' : '⚠️ 当前网络不太稳定，请稍后重试';
+      banner.innerHTML = '⚠️ 网络不太稳定，部分排班/余号可能不是最新。' + (alt ? '<a href="https://' + alt.host + alt.base + location.search + '" style="color:#3182ce;font-weight:600;">切换备用通道</a> · ' : '') + '<a href="javascript:location.reload()" style="color:#3182ce;font-weight:600;">重新加载</a>';
       document.body.prepend(banner);
     }
 
@@ -827,8 +874,8 @@
         sbFetch('schedule_overrides', { query: '?select=*' })
       ]);
 
-      // 入口容灾：云端请求全部失败（大概率是网络/入口问题），提示切换备用通道
-      if ([rulesRes, holidaysRes, countsRes, overridesRes].every(r => r.status === 'rejected')) showFallbackBanner();
+      // 入口容灾：任一云端请求失败/超时（大概率是网络问题）即提示，避免用户对着过期数据毫无察觉
+      if ([rulesRes, holidaysRes, countsRes, overridesRes].some(r => r.status === 'rejected')) showFallbackBanner();
 
       // 规则
       const sbRules = rulesRes.status === 'fulfilled' ? rulesRes.value : null;
@@ -880,6 +927,7 @@
       // 本地记忆功能仍用 localStorage（设备级别，合理）
       if (!applyUrlParams()) loadLastPatient();
       renderRecentPatients();
+      loadNextAppt();
     }
 
     // ===== 保存预约到 Supabase =====
@@ -1037,6 +1085,66 @@
       document.getElementById('patientCard').value = card;
       document.getElementById('isReturnVisit').checked = true;
       autoFillAge();
+      loadNextAppt();
+    }
+
+    // ===== 下次预约卡片：认卡号就自动显示，省掉"查询"那一步；查不到就不出声 =====
+    let nextApptTimer = null;
+    let nextApptList = [];   // 卡片自己的缓存，不与"我的预约"共用
+    let nextApptSeq = 0;     // 只认最后一次请求的结果
+    function onCardInput() {
+      autoFillAge();
+      clearTimeout(nextApptTimer);
+      nextApptTimer = setTimeout(loadNextAppt, 700);
+    }
+    function apptBrief(a) {
+      const d = new Date(a.date);
+      return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + (a.slot === 'am' ? '上午' : '下午');
+    }
+    async function loadNextAppt() {
+      const el = document.getElementById('nextApptCard');
+      if (!el) return;
+      const card = normalizeCard(document.getElementById('patientCard').value);
+      if (!isValidCard(card)) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      const seq = ++nextApptSeq;
+      let list;
+      try {
+        const my = await sbRpc('get_my_appointments', { p_card: card });
+        list = (my || []).map(a => ({
+          id: a.id, name: a.patient_name, date: a.date, slot: a.slot,
+          location: a.location, status: a.status, note: a.note || '',
+          age: a.age, isReturn: a.is_return, createdAt: a.created_at
+        }));
+      } catch (e) {
+        if (seq !== nextApptSeq) return;  // 旧卡号迟到的失败，不许清空新卡号刚渲染的卡片
+        console.warn('下次预约取不到，不打扰', e); el.style.display = 'none'; el.innerHTML = ''; return;
+      }
+      // 慢网下旧卡号的迟到响应不得盖掉新卡号；也不再把结果塞进全局 appointments
+      if (seq !== nextApptSeq) return;
+      if (normalizeCard(document.getElementById('patientCard').value) !== card) return;
+      nextApptList = list;
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      const live = list.filter(a => a.status === 'booked' && new Date(a.date) >= t0)
+                       .sort((a, b) => new Date(a.date) - new Date(b.date));
+      const last = list.filter(a => a.status === 'arrived' || a.status === 'done' ||
+                                   (a.status === 'booked' && new Date(a.date) < t0))
+                       .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      let html = '';
+      if (live.length) {
+        const a = live[0];
+        const sid = escapeHtml(String(a.id).replace(/[^0-9A-Za-z_-]/g, ''));
+        html = `<div class="na-line">📋 下次预约：${apptBrief(a)} · ${getLocName(a.location)}院区</div>
+          <div class="na-sub">凭证号 …${escapeHtml(String(a.id).slice(-4))}${live.length > 1 ? '（另有 ' + (live.length - 1) + ' 条未就诊）' : ''} · 到院后再取号</div>
+          <div class="na-btns">
+            <button type="button" class="na-cancel" onclick="cancelMyAppt('${sid}','cancel')">取消预约</button>
+            <button type="button" class="na-move" onclick="cancelMyAppt('${sid}','reschedule')">改期（先取消再重约）</button>
+          </div>`;
+      } else if (last) {
+        html = `<div class="na-line">📋 上次就诊：${apptBrief(last)} · ${getLocName(last.location)}院区</div>
+          <div class="na-sub">要约下次，直接在下面日历挑日子就行</div>`;
+      }
+      el.innerHTML = html;
+      el.style.display = html ? 'block' : 'none';
     }
 
     // ===== 年龄记忆（按卡号）=====
@@ -1126,13 +1234,15 @@
       };
     }
 
-    // ===== 17:00截止 =====
+    // ===== 卡号校验 =====
     function normalizeCard(card) {
-      return (card || '').trim();
+      // 统一大写：H 开头卡号大小写混用会把同一患者分裂成两条档案（查重/我的预约全部失配）
+      return (card || '').trim().toUpperCase();
     }
 
+    // 2026-08 放宽：13 开头(15位数字) 或 H 开头(15位字母数字)。Keep in sync with src/rules.mjs
     function isValidCard(card) {
-      return /^(131|H00)/i.test(card) && card.length === 15;
+      return /^13\d{13}$/.test(card) || /^H[A-Za-z0-9]{14}$/i.test(card);
     }
 
     function escapeHtml(s) {
@@ -1144,13 +1254,157 @@
         .replace(/'/g, '&#39;');
     }
 
-    function isSlotBookable(date, slot) {
-      const now = new Date();
+    // ===== 场次拥挤度（2026-09 按近 12 个已过场次实测；高峰场次量级为其他场次的 3–5 倍）=====
+    // 只写倍数不写人头：院内实到客流约有 10–30% 不走本系统，绝对人数会低估；两边同口径，比值才可靠。
+    // 也不承诺任何到院时刻——医院叫号顺序只认小程序现场取号。
+    const CROWD_PEAK = {
+      '6am': { name: '周六上午' },
+      '4am': { name: '周四上午' },
+      '5pm': { name: '周五下午' }
+    };
+    // 实测最轻的几个场次（日均 2.3–5.0），给患者一条出路
+    const CROWD_QUIET = { '2am': 1, '2pm': 1, '5am': 1, '4pm': 1 };
+
+    // ===== 这次要做（选填）：长操作需要更宽松的时间。初诊按段医生口径不算长操作 =====
+    const LONG_OPS = ['拆托槽', '粘接托槽', '隐形首次佩戴'];
+    const LONG_OP_MINUTES = 40;
+    let visitPurpose = '';
+    function isLongOp(p) { return LONG_OPS.indexOf(p) >= 0; }
+
+    // 单一建议槽的仲裁：一次只亮一条。block=真阻断(红) warm=为你好(琥珀) good=选对了(绿)
+    function advisoryLevel(state) {
+      if (state.cutoff) return 'block';
+      if (state.longOp && state.peak) return 'warm';
+      if (state.longOp) return 'good';
+      if (state.peak) return 'warm';
+      return 'none';
+    }
+
+    function crowdPeakName(date, ds) {
+      const wd = date.getDay();
+      if (ds.am.enabled && CROWD_PEAK[wd + 'am']) return CROWD_PEAK[wd + 'am'].name;
+      if (ds.pm.enabled && CROWD_PEAK[wd + 'pm']) return CROWD_PEAK[wd + 'pm'].name;
+      return null;
+    }
+
+    // 往后找几个"人少又还有号"的日子：提示必须自带出路，不能只劝一句
+    function quietDayChoices(limitN) {
+      const out = [];
+      const nowRef = new Date();
+      const today = new Date(nowRef.getFullYear(), nowRef.getMonth(), nowRef.getDate());
+      const maxDate = new Date(today.getFullYear(), today.getMonth() + 2, today.getDate());
+      for (let i = 0; i < 60 && out.length < limitN; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+        if (d > maxDate) break;
+        if (isEffectiveHoliday(getDateKey(d))) continue;
+        const ds = getDaySchedule(d);
+        const wd = d.getDay();
+        const cand = [];
+        if (ds.am.enabled && CROWD_QUIET[wd + 'am'] && !slotCutoffReason(d, 'am')) cand.push(['am', '上午', ds.am.maxSlot]);
+        if (ds.pm.enabled && CROWD_QUIET[wd + 'pm'] && !slotCutoffReason(d, 'pm')) cand.push(['pm', '下午', ds.pm.maxSlot]);
+        for (const c of cand) {
+          if (getSlotCount(d, c[0]) >= c[2]) continue;
+          out.push({ date: d, slot: c[0], label: (d.getMonth() + 1) + '/' + d.getDate() + ' 周' + '日一二三四五六'[wd] + c[1] });
+          break;
+        }
+      }
+      return out;
+    }
+    let quietDayCache = [];
+    function quietDayHTML() {
+      quietDayCache = quietDayChoices(3);
+      if (!quietDayCache.length) return '最近人少的日子号也紧，也可以就按现在的时间来，早一点到院。';
+      return '<br>' + quietDayCache.map((c, i) =>
+        `<button type="button" class="quiet-btn" onclick="pickQuietDay(${i})">${c.label}</button>`).join('');
+    }
+    function pickQuietDay(i) {
+      const c = quietDayCache[i];
+      if (!c) return;
+      currentYear = c.date.getFullYear();
+      currentMonth = c.date.getMonth();
+      selectDate(c.date);
+    }
+
+    // 同一天里可能上午是高峰、下午很空（周四、周五就是这样），得当场说清该挑哪个半天
+    function quietSlotLabels(date, ds) {
+      const wd = date.getDay();
+      const out = [];
+      if (ds.am.enabled && CROWD_QUIET[wd + 'am']) out.push('上午');
+      if (ds.pm.enabled && CROWD_QUIET[wd + 'pm']) out.push('下午');
+      return out;
+    }
+
+    function renderAdvisory(date, ds) {
+      const bar = document.getElementById('advisoryBar');
+      if (!bar) return;
+      const cuts = [];
+      const amCut = ds.am.enabled ? slotCutoffReason(date, 'am') : null;
+      const pmCut = ds.pm.enabled ? slotCutoffReason(date, 'pm') : null;
+      if (amCut) cuts.push('上午 · ' + amCut);
+      if (pmCut) cuts.push('下午 · ' + pmCut);
+      const peak = crowdPeakName(date, ds);
+      const altSlots = peak ? quietSlotLabels(date, ds) : [];
+      const longOp = isLongOp(visitPurpose);
+      const level = advisoryLevel({ cutoff: cuts.length > 0, longOp: longOp, peak: !!peak });
+      if (level === 'none') { bar.className = 'advisory'; bar.innerHTML = ''; return; }
+      let html;
+      if (level === 'block') {
+        html = '⛔ ' + cuts.join('；') + '。';
+      } else if (longOp && peak) {
+        html = '💛 ' + escapeHtml(visitPurpose) + '大约需要 ' + LONG_OP_MINUTES +
+          ' 分钟，讲究手上细致。时间宽裕些，医生能做得更精细。' +
+          (altSlots.length
+            ? '这天的' + peak.slice(-2) + '人多，' + altSlots.join('、') + '人少——建议挑' + altSlots[0] + '，做得从容。'
+            : '这几天人少，做得从容：' + quietDayHTML());
+      } else if (longOp) {
+        html = '✅ 这个日子患者少，' + LONG_OP_MINUTES + ' 分钟的操作能做得从容，你不用赶时间，医生也能顾得更细。';
+      } else {
+        html = '🕐 ' + peak + '看的人多些，等待会长一点。' +
+          (altSlots.length ? '这天的' + altSlots.join('、') + '人少一些，可以挑那个时段。' : '') +
+          '带本读物和零食，你就是闹市中的陶渊明。';
+      }
+      bar.className = 'advisory ' + level;
+      bar.innerHTML = html;
+    }
+
+    function setPurpose(p) {
+      visitPurpose = (visitPurpose === p) ? '' : p;
+      document.querySelectorAll('.purpose-chip').forEach(b =>
+        b.classList.toggle('selected', b.dataset.purpose === visitPurpose));
+      // 与表单那组勾选同一口径，别让人填两遍
+      const ret = document.getElementById('isReturnVisit');
+      if (ret && visitPurpose) ret.checked = (visitPurpose !== '初诊');
+      if (selectedDate) renderAdvisory(selectedDate, getDaySchedule(selectedDate));
+    }
+
+    // 芯片同时把长操作带给医生端（进 issue_tags，名单上直接看得到）
+    function mergePurposeIntoTags(tags) {
+      if (!visitPurpose || visitPurpose === '常规复诊' || visitPurpose === '初诊') return tags;
+      const t = tags || '';
+      if (t.indexOf(visitPurpose) >= 0) return t;
+      if (!t || t === '正常复诊') return visitPurpose;
+      return t + ',' + visitPurpose;
+    }
+
+    // ===== 挂号截止（医院：当日上午号 11:00 截止，当日下午号 16:00 截止）=====
+    // Keep in sync with src/rules.mjs slotCutoffReason
+    const AM_CUTOFF_HOUR = 11;
+    const PM_CUTOFF_HOUR = 16;
+    const TOMORROW_AM_CUTOFF_HOUR = 17;
+    function slotCutoffReason(date, slot, now) {
+      now = now || new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
       const target = new Date(date); target.setHours(0,0,0,0);
-      if (target.getTime() === tomorrow.getTime() && slot==='am' && now.getHours()>=17) return false;
-      return true;
+      const dayDiff = Math.round((target - today) / (24*60*60*1000));
+      if (dayDiff === 0) {
+        if (slot === 'am' && now.getHours() >= AM_CUTOFF_HOUR) return '当日上午号 ' + AM_CUTOFF_HOUR + ':00 截止，请选择之后的日期';
+        if (slot === 'pm' && now.getHours() >= PM_CUTOFF_HOUR) return '当日下午号 ' + PM_CUTOFF_HOUR + ':00 截止，请选择之后的日期';
+      }
+      if (dayDiff === 1 && slot === 'am' && now.getHours() >= TOMORROW_AM_CUTOFF_HOUR) return '今日' + TOMORROW_AM_CUTOFF_HOUR + ':00后，不可预约明天上午';
+      return null;
+    }
+    function isSlotBookable(date, slot) {
+      return slotCutoffReason(date, slot) === null;
     }
 
     function getSlotCount(date, slot) {
@@ -1269,22 +1523,16 @@
 
       document.getElementById('amLoc').textContent = ds.am.enabled ? `${getLocName(ds.am.location)} · 剩余${amRemaining}/${ds.am.maxSlot}${amFull ? '（已满）' : ''}` : '停诊';
       document.getElementById('pmLoc').textContent = ds.pm.enabled ? `${getLocName(ds.pm.location)} · 剩余${pmRemaining}/${ds.pm.maxSlot}${pmFull ? '（已满）' : ''}` : '停诊';
-      document.getElementById('amAddr').textContent = ds.am.enabled ? `📍 ${LOCATION_ADDRESSES[ds.am.location]}` : '';
-      document.getElementById('pmAddr').textContent = ds.pm.enabled ? `📍 ${LOCATION_ADDRESSES[ds.pm.location]}` : '';
+      const amReason = slotCutoffReason(date, 'am');
+      const pmReason = slotCutoffReason(date, 'pm');
+      document.getElementById('amAddr').textContent = ds.am.enabled ? `📍 ${LOCATION_ADDRESSES[ds.am.location]}${amReason ? ' · ⏰ ' + amReason : ''}` : '';
+      document.getElementById('pmAddr').textContent = ds.pm.enabled ? `📍 ${LOCATION_ADDRESSES[ds.pm.location]}${pmReason ? ' · ⏰ ' + pmReason : ''}` : '';
 
       if (!ds.am.enabled || !amBookable || amFull) amOpt.classList.add('closed');
       if (!ds.pm.enabled || !pmBookable || pmFull) pmOpt.classList.add('closed');
 
-      // 截止提醒
-      const now = new Date();
-      const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
-      const isTomorrow = date.toDateString() === tomorrow.toDateString();
-      const warn = document.getElementById('deadlineWarning');
-      if (isTomorrow && now.getHours() >= 17) {
-        warn.classList.add('show');
-      } else {
-        warn.classList.remove('show');
-      }
+      // 所有提醒只走这一个槽，一次一条
+      renderAdvisory(date, ds);
 
       window.scrollTo({ top: document.getElementById('slotCard').offsetTop - 10, behavior: 'smooth' });
     }
@@ -1294,7 +1542,8 @@
       const ds = getDaySchedule(selectedDate);
       const cfg = ds[slot];
       if (!cfg.enabled) { showToast('该时段已停诊', 'error'); return; }
-      if (!isSlotBookable(selectedDate, slot)) { showToast('今日17:00后不可预约明天上午', 'error'); return; }
+      const cutoffMsg = slotCutoffReason(selectedDate, slot);
+      if (cutoffMsg) { showToast(cutoffMsg, 'error'); return; }
       if (getSlotCount(selectedDate, slot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
 
       selectedSlot = slot;
@@ -1371,7 +1620,7 @@
 
       if (!name) { showToast('请输入患者姓名', 'error'); return; }
       if (!card) { showToast('请输入就诊卡号', 'error'); return; }
-      if (!isValidCard(card)) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
+      if (!isValidCard(card)) { showToast('自费卡号格式有误（13 开头或 H 开头，共 15 位）', 'error'); return; }
       if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
       if (!selectedDate || !selectedSlot) { showToast('请先选择日期和时段', 'error'); return; }
 
@@ -1386,7 +1635,8 @@
       const ds = getDaySchedule(selectedDate);
       const cfg = ds[selectedSlot];
       if (!cfg.enabled) { showToast('该时段已停诊', 'error'); return; }
-      if (!isSlotBookable(selectedDate, selectedSlot)) { showToast('已超过今日17:00，不可预约明天上午', 'error'); return; }
+      const cutoffAtSubmit = slotCutoffReason(selectedDate, selectedSlot);
+      if (cutoffAtSubmit) { showToast(cutoffAtSubmit, 'error'); return; }
       if (getSlotCount(selectedDate, selectedSlot) >= cfg.maxSlot) { showToast('该时段已满额', 'error'); return; }
 
       // 防重复预约：RPC 成功且重复时阻断；RPC 异常时不阻断（校验是辅助，不能因它瘫痪预约）
@@ -1413,7 +1663,7 @@
       // 进入提交：禁用按钮防连点
       btn.disabled = true; btn.classList.add('btn-loading'); btn.textContent = '提交中…';
       // 收集问题标签
-      const issueTags = collectIssueTags();
+      const issueTags = mergePurposeIntoTags(collectIssueTags());
       // 拍照提醒（不阻塞提交，只展示）
       checkPhotoReminder(card);
       try {
@@ -1434,6 +1684,7 @@
         if (saveResult.status === 'local') {
           // 网络/接口异常：仅存本机，如实提示，不假成功
           pendingLocalAppt = appt;
+          enqueuePendingSync(appt);  // 落持久队列，重启后自动补传，避免丢单
           showToast('网络异常，已暂存本机，联网后自动同步', 'warn');
           showSuccessModal(appt, true);
           renderCalendar();
@@ -1457,9 +1708,11 @@
           } catch(e) { console.warn('关联登记失败', e); }
         }
         saveLastPatient(name, card, isReturn, age);
+      loadNextAppt();   // 刚约完，首页卡片立刻反映这条，不留旧约
         setAgeForCard(card, age);
 
         pendingLocalAppt = null;
+        dequeuePendingSyncByAppt(appt);  // 云成功：按业务键清除队列（appt.id 已被回写成库 id，不能再按 id 出队）
         showSuccessModal(appt, false);
         renderCalendar();
 
@@ -1495,6 +1748,7 @@
         <p><strong>日期：</strong>${dateStr} ${slotStr}</p>
         <p><strong>地点：</strong>${getLocName(appt.location)}院区</p>
         <p style="font-size:12px;color:#e53e3e;margin-top:2px;">📍 ${LOCATION_ADDRESSES[appt.location]}</p>
+        ${isLocal ? '' : `<p style="margin-top:10px;padding:8px 10px;background:#eff6ff;border-radius:8px;font-size:13px;color:#1e40af;line-height:1.75;">📱 <strong>就诊当天请先到院取号</strong>：在「第九人民医院微信服务号」选择 <strong>微自助 → 当日挂号 → 已预约挂号</strong> 完成取号。${appt.location === 'east' ? '<br>🩺 <strong>东部院区</strong>还需到护士台签到。' : ''}</p>`}
         ${appt.note?`<p><strong>备注：</strong>${escapeHtml(appt.note)}</p>`:''}
         <p class="voucher-id">凭证号：${escapeHtml(appt.id)}</p>
         ${isLocal ? '' : '<div style="margin-top:10px;"><button class="btn-primary" style="width:100%;padding:10px;font-size:14px;background:#0984e3;" onclick="copyMyLink()">📋 复制我的专属预约链接（下次免填写）</button></div>'}
@@ -1506,13 +1760,68 @@
     }
 
     let pendingLocalAppt = null;
+
+    // ===== 离线补传持久队列 =====
+    // 旧实现 pendingLocalAppt 只在内存里，患者关页面即丢单（医生端永远看不到）。
+    // 现在落 localStorage 持久队列：提交失败即入队，启动/切回前台自动补传，成功才出队。
+    const PENDING_SYNC_KEY = 'ortho_pending_sync';
+    function loadPendingSyncs() { try { return JSON.parse(localStorage.getItem(PENDING_SYNC_KEY) || '[]'); } catch (e) { return []; } }
+    function savePendingSyncs(list) { localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(list || [])); }
+    function enqueuePendingSync(appt) {
+      const l = loadPendingSyncs();
+      if (!l.some(a => a.id === appt.id)) l.push(appt);
+      while (l.length > 20) l.shift();  // 队列上限 20 条，丢最旧，防无限膨胀
+      savePendingSyncs(l);
+    }
+    function dequeuePendingSync(id) { savePendingSyncs(loadPendingSyncs().filter(a => a.id !== id)); }
+    // 云成功时 appt.id 已被回写成数据库 id，队列里存的是提交时的本机 id——按业务键清除才可靠
+    function dequeuePendingSyncByAppt(appt) {
+      savePendingSyncs(loadPendingSyncs().filter(a => !(a.card === appt.card && a.date === appt.date && a.slot === appt.slot && a.name === appt.name)));
+    }
+    function bumpTries(id) {
+      const l = loadPendingSyncs();
+      const it = l.find(a => a.id === id);
+      if (it) { it._tries = (it._tries || 0) + 1; savePendingSyncs(l); }
+    }
+
+    let flushing = false;
+    const SYNC_MAX_TRIES = 8;
+    async function flushPendingSyncs() {
+      if (flushing) return;
+      const l = loadPendingSyncs();
+      if (!l.length) return;
+      flushing = true;
+      let ok = 0, exhausted = 0;
+      try {
+        for (const appt of l) {
+          const qid = appt.id;  // 入队时的本机 id：云成功后 appt.id 会被回写成库 id，出队必须用 qid
+          if ((appt._tries || 0) >= SYNC_MAX_TRIES) { exhausted++; continue; }
+          try {
+            // 防重复提交：先查云端是否已存在该预约（上次可能"已写入但响应超时"）
+            const mine = await sbRpc('get_my_appointments', { p_card: appt.card });
+            const exists = (mine || []).find(a => a.date === appt.date && a.slot === appt.slot && a.patient_name === appt.name && (a.status || '') !== 'cancel');
+            if (exists) { dequeuePendingSync(qid); ok++; continue; }
+            const res = await saveAppointmentToDB(appt);
+            if (res.status === 'cloud') { dequeuePendingSync(qid); ok++; }
+            else { bumpTries(qid); }
+          } catch (e) { bumpTries(qid); /* 单条失败保留队列，计数防无限重试 */ }
+        }
+      } finally {
+        flushing = false;
+      }
+      if (ok > 0) { showToast('已自动补传 ' + ok + ' 笔预约到医生端', 'success'); renderCalendar(); }
+      if (exhausted > 0) showToast('有 ' + exhausted + ' 笔预约长期同步失败，已停止自动重试，请联网后重新提交', 'warn');
+    }
+
     function retryLastLocal() {
       if (!pendingLocalAppt) { showToast('没有待同步的预约', 'warn'); return; }
       const appt = pendingLocalAppt;
+      const qid = appt.id;  // 云成功后 appt.id 会被回写成库 id，先捕获入队 id
       showToast('正在重试同步…', 'info');
       saveAppointmentToDB(appt).then(function(res) {
         if (res.status === 'cloud') {
           pendingLocalAppt = null;
+          dequeuePendingSync(qid);
           showSuccessModal(appt, false);
           renderCalendar();
           showToast('已成功同步到云端', 'success');
@@ -1594,13 +1903,17 @@
       }).join('');
     }
 
-    async function cancelMyAppt(id) {
-      const idx = appointments.findIndex(a => a.id === id);
-      if (idx === -1) return;
-      const a = appointments[idx];
+    async function cancelMyAppt(id, mode) {
+      let src = appointments, idx = src.findIndex(a => String(a.id) === String(id));
+      if (idx === -1) { src = nextApptList; idx = src.findIndex(a => String(a.id) === String(id)); }
+      if (idx === -1) { showToast('记录已变动，请重新输入卡号后再操作', 'error'); return; }
+      const a = src[idx];
       if (a.status !== 'booked') { showToast('该预约已无法取消', 'error'); return; }
 
-      if (!confirm(`确定取消 ${a.name} ${a.slot==='am'?'上午':'下午'} 的预约吗？`)) return;
+      const tip = mode === 'reschedule'
+        ? `改期需要先取消这约：确定取消 ${a.name} ${a.slot==='am'?'上午':'下午'} 的预约，然后重新挑日子吗？`
+        : `确定取消 ${a.name} ${a.slot==='am'?'上午':'下午'} 的预约吗？`;
+      if (!confirm(tip)) return;
 
       // 先调 RPC 更新 Supabase，成功后再改本地状态
       const ok = await cancelAppointmentInDB(id);
@@ -1609,11 +1922,17 @@
         return;
       }
 
-      appointments[idx].status = 'cancel';
+      src[idx].status = 'cancel';
       slotCountMap[`${a.date}_${a.slot}`] = Math.max(0, (slotCountMap[`${a.date}_${a.slot}`] || 0) - 1);
       queryAppointments();
+      loadNextAppt();
       renderCalendar();
-      showToast('已取消预约');
+      if (mode === 'reschedule') {
+        showToast('已取消，请在日历重新选日期');
+        document.getElementById('calendar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        showToast('已取消预约');
+      }
     }
 
     // ===== 注意事项（患者端侧栏）=====
@@ -1721,10 +2040,9 @@
       const age = parseInt(document.getElementById('regAge').value);
       if (!name) { showToast('请输入患者姓名', 'error'); return; }
       if (!card) { showToast('请输入就诊卡号', 'error'); return; }
-      if (!isValidCard(card)) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
+      if (!isValidCard(card)) { showToast('自费卡号格式有误（13 开头或 H 开头，共 15 位）', 'error'); return; }
       if (!age || age < 1 || age > 120) { showToast('请填写有效的年龄', 'error'); return; }
       try {
-        const hd = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
         // 去重：同卡号+同类型+未佩戴的 pending 记录（保留最后一次，其余软删 status=cancel）
         const dup = await sbFetch('checklists', { query: `?select=id,created_at&patient_card=eq.${encodeURIComponent(card)}&checklist_type=eq.${regType}&status=eq.pending&bonded=eq.false&order=created_at.desc` });
         let cid;
@@ -1739,21 +2057,14 @@
           // 1. 直写 checklists 主记录（含卡号/年龄/院区；若列未迁移则降级为仅基础字段，保证不崩）
           const baseBody = { patient_name: name, checklist_type: regType, status: 'pending' };
           const fullBody = { ...baseBody, patient_card: card, patient_age: age, campus: regCampus };
-          let clRes = await fetch(`${SB_URL}/rest/v1/checklists`, {
-            method: 'POST',
-            headers: { ...hd, 'Prefer': 'return=representation' },
-            body: JSON.stringify(fullBody)
-          });
-          if (!clRes.ok) {
+          let created = null;
+          try {
+            created = await sbFetch('checklists', { method: 'POST', prefer: 'return=representation', body: fullBody });
+          } catch (e) {
             // 降级：workflow 相关列未就绪时只写基础字段
-            clRes = await fetch(`${SB_URL}/rest/v1/checklists`, {
-              method: 'POST',
-              headers: { ...hd, 'Prefer': 'return=representation' },
-              body: JSON.stringify(baseBody)
-            });
-            if (!clRes.ok) throw new Error('创建清单失败: ' + clRes.status);
+            created = await sbFetch('checklists', { method: 'POST', prefer: 'return=representation', body: baseBody });
           }
-          const cl = (await clRes.json())[0];
+          const cl = created && created[0];
           cid = cl && cl.id;
           if (!cid) throw new Error('创建失败：未返回 id');
           // 2. 读模板（restart 复用 broken，与 checklist.html 一致）
@@ -1847,7 +2158,12 @@
       await loadTemplates();
       loadNotices();
       renderCalendar();
+      flushPendingSyncs();  // 启动即补传之前网络失败暂存的预约
     })();
+    // 切回前台时顺带补传待同步队列（网络一通，医生端立刻能看到）
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) flushPendingSyncs();
+    });
   </script>
   <script>
     if ('serviceWorker' in navigator) {

@@ -354,6 +354,9 @@
     .status-arrived { background: #c6f6d5; color: #22543d; }
     .status-done { background: #e2e8f0; color: #4a5568; }
     .status-cancel { background: #fed7d7; color: #c53030; text-decoration: line-through; }
+    /* 当日名单里已取消的整条划掉置灰（标签自身不加删除线） */
+    .appt-patient-row.cancelled { opacity: .55; text-decoration: line-through; }
+    .appt-patient-row.cancelled .cancelled-tag { text-decoration: none; }
     .appt-actions { display: flex; gap: 3px; }
     .appt-actions button {
       border: none;
@@ -1271,17 +1274,6 @@
       document.getElementById('pmCount').textContent = ds.pm.enabled ? `${pmCount}/${ds.pm.maxSlot}` : '停诊';
       document.getElementById('amAddrAdmin').textContent = ds.am.enabled ? `📍 ${LOCATION_ADDRESSES[ds.am.location]}` : '';
       document.getElementById('pmAddrAdmin').textContent = ds.pm.enabled ? `📍 ${LOCATION_ADDRESSES[ds.pm.location]}` : '';
-
-      const amOpt = document.querySelector('[data-slot="am"]');
-      const pmOpt = document.querySelector('[data-slot="pm"]');
-
-      amOpt.classList.toggle('full', ds.am.enabled && amCount >= ds.am.maxSlot);
-      amOpt.classList.toggle('closed', !ds.am.enabled || !amBookable);
-      pmOpt.classList.toggle('full', ds.pm.enabled && pmCount >= ds.pm.maxSlot);
-      pmOpt.classList.toggle('closed', !ds.pm.enabled || !pmBookable);
-      amOpt.classList.remove('selected');
-      pmOpt.classList.remove('selected');
-
       const deadlineWarn = document.getElementById('deadlineWarning');
       const now = new Date();
       const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1291,6 +1283,15 @@
       } else {
         deadlineWarn.classList.remove('show');
       }
+      const amOpt = document.querySelector('[data-slot="am"]');
+      const pmOpt = document.querySelector('[data-slot="pm"]');
+
+      amOpt.classList.toggle('full', ds.am.enabled && amCount >= ds.am.maxSlot);
+      amOpt.classList.toggle('closed', !ds.am.enabled || !amBookable);
+      pmOpt.classList.toggle('full', ds.pm.enabled && pmCount >= ds.pm.maxSlot);
+      pmOpt.classList.toggle('closed', !ds.pm.enabled || !pmBookable);
+      amOpt.classList.remove('selected');
+      pmOpt.classList.remove('selected');
 
       document.getElementById('timeSelector').style.display = 'flex';
       document.getElementById('bookingForm').style.display = 'none';
@@ -1396,7 +1397,7 @@
         const ageInput = document.getElementById('patientAge').value;
         const age = ageInput ? parseInt(ageInput) : null;
         if (!name || !card) { showToast('请填写完整信息', 'error'); return; }
-        if (!/^(131|H00)/i.test(card) || card.length !== 15) { showToast('自费卡号格式有误（131或H00开头，共15位）', 'error'); return; }
+        if (!(/^13\d{13}$/.test(card) || /^H[A-Za-z0-9]{14}$/i.test(card))) { showToast('自费卡号格式有误（13 开头或 H 开头，共 15 位）', 'error'); return; }
         if (age !== null && (age < 1 || age > 120)) { showToast('年龄请输入1-120之间的数字', 'error'); return; }
         if (!selectedDate || !selectedSlot) { showToast('请先选择日期和时段', 'error'); return; }
 
@@ -2988,21 +2989,25 @@
         return;
       }
       const ds = getDateKey(apptCalDate);
-      const dateAppts = appointments.filter(a => a.date === ds && a.status !== 'cancel');
+      const allDayAppts = appointments.filter(a => a.date === ds);
+      const dateAppts = allDayAppts.filter(a => a.status !== 'cancel');
       if (titleEl) {
         const weekday = ['日','一','二','三','四','五','六'][apptCalDate.getDay()];
         titleEl.textContent = (apptCalDate.getMonth()+1) + '月' + apptCalDate.getDate() + '日 周' + weekday + ' 共' + dateAppts.length + '人';
       }
-      if (dateAppts.length === 0) {
+      if (allDayAppts.length === 0) {
         el.innerHTML = '<div class="empty-state">当日无预约</div>';
         return;
       }
       let html = '';
       ['am','pm'].forEach(slot => {
-        const slotAppts = dateAppts.filter(a => a.slot === slot);
+        // 有效号在前、已取消沉到最后；"已约N"只数有效号，放号口径不变
+        const slotActive = allDayAppts.filter(a => a.slot === slot && a.status !== 'cancel');
+        const slotCancelled = allDayAppts.filter(a => a.slot === slot && a.status === 'cancel');
+        const slotAppts = slotActive.concat(slotCancelled);
         const cfg = getDaySchedule(apptCalDate)[slot];
         if (slotAppts.length === 0 && !cfg.enabled) return;
-        const count = slotAppts.length;
+        const count = slotActive.length;
         const max = cfg.enabled ? cfg.maxSlot : 0;
         html += '<div class="appt-day-group">';
         html += '<div class="appt-day-header">' + (slot==='am'?'上午':'下午') + '（已约' + count + (max>0?'/放号'+max:'') + '）</div>';
@@ -3010,6 +3015,12 @@
           html += '<div class="empty-state" style="padding:8px;">暂无</div>';
         } else {
           slotAppts.forEach(a => {
+            if (a.status === 'cancel') {
+              html += '<div class="appt-patient-row cancelled">' + escapeHtml(a.name)
+                + ' <span class="cancelled-tag" style="display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;background:#fed7d7;color:#c53030;">已取消</span>'
+                + '</div>';
+              return;
+            }
             const todo = hasTodo(a.card, a.name);
             const todoTypes = getTodoTypes(a.card, a.name);
             let todoTag = '';

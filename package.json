@@ -4,7 +4,7 @@
   "private": true,
   "description": "段医生正畸预约+登记系统（duan-ortho.top）",
   "scripts": {
-    "test": "node --test tests/unit/business-rules.test.mjs tests/unit/proxy-auth.test.mjs",
+    "test": "node --test tests/unit/business-rules.test.mjs tests/unit/proxy-auth.test.mjs tests/unit/proxy-route.test.mjs",
     "e2e": "playwright test",
     "check": "node --check functions/api/sb/[[path]].js",
     "predeploy": "node scripts/pre-deploy-check.cjs"

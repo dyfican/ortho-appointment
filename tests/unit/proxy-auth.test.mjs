@@ -23,16 +23,22 @@ describe('staff权限限制',()=>{
 });
 
 describe('staff字段白名单',()=>{
-  test('只保留允许字段',()=>{
+  test('只保留允许字段(workflow_stage已移除)',()=>{
     const body={workflow_stage:'done',patient_card:'123',bonded:true,appointment_id:99};
     const cleaned=filterStaffFields(body);
-    assert.deepEqual(cleaned,{workflow_stage:'done',bonded:true});
+    assert.deepEqual(cleaned,{bonded:true});
     assert.equal('patient_card' in cleaned,false);
     assert.equal('appointment_id' in cleaned,false);
+    assert.equal('workflow_stage' in cleaned,false);
   });
   test('空body->空结果',()=>assert.deepEqual(filterStaffFields({}),{}));
   test('全允许字段->全保留',()=>{
-    const body={workflow_stage:'x',sent:true,received:false,bonded:false,status:'pending'};
+    const body={sent:true,received:false,bonded:false,status:'pending'};
     assert.deepEqual(filterStaffFields(body),body);
+  });
+  test('workflow_stage 永不被 staff 保留',()=>{
+    const body={workflow_stage:'aligner_sent',sent:true};
+    const cleaned=filterStaffFields(body);
+    assert.deepEqual(cleaned,{sent:true});
   });
 });

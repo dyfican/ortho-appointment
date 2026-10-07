@@ -26,10 +26,12 @@ test('booking flow: either success modal or honest error, never fake success', a
   await page.goto('/');
   await expect(page.locator('.day-cell').first()).toBeVisible({ timeout: 20000 });
 
-  const day = page.locator('.day-cell:not(.no-schedule):not(.other-month)').first();
+  // 不选今天：当日上午 11:00 / 下午 16:00 后已截止，表单不会出现；时段只挑未截止的
+  const day = page.locator('.day-cell:not(.no-schedule):not(.other-month):not(.today):not(.holiday)').first();
   await day.click();
-  const slot = page.locator('.time-option').first();
+  const slot = page.locator('.time-option:not(.closed)').first();
   await slot.click();
+  await expect(page.locator('#bookingForm')).toBeVisible();
 
   await page.fill('#patientName', 'E2E测试');
   await page.fill('#patientCard', randomCard());
@@ -59,10 +61,12 @@ test('offline: shows validation failure toast, not fake success', async ({ page 
   await page.goto('/');
   await expect(page.locator('.day-cell').first()).toBeVisible({ timeout: 20000 });
 
-  const day = page.locator('.day-cell:not(.no-schedule):not(.other-month)').first();
+  // 不选今天：当日上午 11:00 / 下午 16:00 后已截止，表单不会出现；时段只挑未截止的
+  const day = page.locator('.day-cell:not(.no-schedule):not(.other-month):not(.today):not(.holiday)').first();
   await day.click();
-  const slot = page.locator('.time-option').first();
+  const slot = page.locator('.time-option:not(.closed)').first();
   await slot.click();
+  await expect(page.locator('#bookingForm')).toBeVisible();
 
   await page.fill('#patientName', 'E2E断网');
   await page.fill('#patientCard', randomCard());
@@ -79,10 +83,12 @@ test('submit button recovers after flow completes', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.day-cell').first()).toBeVisible({ timeout: 20000 });
 
-  const day = page.locator('.day-cell:not(.no-schedule):not(.other-month)').first();
+  // 不选今天：当日上午 11:00 / 下午 16:00 后已截止，表单不会出现；时段只挑未截止的
+  const day = page.locator('.day-cell:not(.no-schedule):not(.other-month):not(.today):not(.holiday)').first();
   await day.click();
-  const slot = page.locator('.time-option').first();
+  const slot = page.locator('.time-option:not(.closed)').first();
   await slot.click();
+  await expect(page.locator('#bookingForm')).toBeVisible();
 
   await page.fill('#patientName', 'E2E恢复');
   await page.fill('#patientCard', randomCard());
