@@ -1137,7 +1137,7 @@
           <div class="na-sub">凭证号 …${escapeHtml(String(a.id).slice(-4))}${live.length > 1 ? '（另有 ' + (live.length - 1) + ' 条未就诊）' : ''} · 到院后再取号</div>
           <div class="na-btns">
             <button type="button" class="na-cancel" onclick="cancelMyAppt('${sid}','cancel')">取消预约</button>
-            <button type="button" class="na-move" onclick="cancelMyAppt('${sid}','reschedule')">改期（先取消再重约）</button>
+            <button type="button" class="na-move" onclick="cancelMyAppt('${sid}','reschedule')">改期</button>
           </div>`;
       } else if (last) {
         html = `<div class="na-line">📋 上次就诊：${apptBrief(last)} · ${getLocName(last.location)}院区</div>
